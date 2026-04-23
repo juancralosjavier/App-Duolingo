@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int            @id @default(autoincrement())
+  name      String
+  email     String         @unique
+  password  String
+  xp        Int            @default(0)
+  hearts    Int            @default(5)
+  streak    Int            @default(0)
+  createdAt DateTime       @default(now())
+  progress  UserProgress[]
+}
+
+model Course {
+  id        Int     @id @default(autoincrement())
+  title     String
+  language  String
+  units     Unit[]
+}
+
+model Unit {
+  id        Int      @id @default(autoincrement())
+  title     String
+  order     Int
+  courseId  Int
+  course    Course   @relation(fields: [courseId], references: [id])
+  lessons   Lesson[]
+}
+
+model Lesson {
+  id        Int         @id @default(autoincrement())
+  title     String
+  order     Int
+  unitId    Int
+  unit      Unit        @relation(fields: [unitId], references: [id])
+  questions Question[]
+}
+
+model Question {
+  id        Int       @id @default(autoincrement())
+  text      String
+  type      String
+  lessonId  Int
+  lesson    Lesson    @relation(fields: [lessonId], references: [id])
+  options   Option[]
+}
+
+model Option {
+  id         Int      @id @default(autoincrement())
+  text       String
+  isCorrect  Boolean  @default(false)
+  questionId Int
+  question   Question @relation(fields: [questionId], references: [id])
+}
+
+model UserProgress {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  lessonId    Int
+  completed   Boolean  @default(false)
+  score       Int      @default(0)
+  lastPlayed  DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id])
+}

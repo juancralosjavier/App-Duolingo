@@ -1,50 +1,171 @@
-# Welcome to your Expo app 👋
+# MateCamba
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Aplicacion movil inspirada en Duolingo Math, adaptada a un contexto de Santa Cruz, Bolivia.
 
-## Get started
+El proyecto tiene dos partes:
 
-1. Install dependencies
+- `app`: frontend con `Expo + React Native`
+- `api`: backend con `Express + Prisma + SQLite`
 
-   ```bash
-   npm install
-   ```
+## Repositorio
 
-2. Start the app
+Repositorio compartible:
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```text
+https://github.com/juancralosjavier/App-Duolingo.git
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Para clonar:
 
-## Learn more
+```bash
+git clone https://github.com/juancralosjavier/App-Duolingo.git
+cd App-Duolingo
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+## Requisitos
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+- Node.js instalado
+- Git instalado
+- Expo Go en celular o Android Studio para emulador
 
-## Join the community
+## Instalacion
 
-Join our community of developers creating universal apps.
+### 1. Instalar frontend
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+En la raiz del proyecto:
+
+```bash
+npm install
+```
+
+### 2. Instalar backend
+
+Entrar a la carpeta `api`:
+
+```bash
+cd api
+npm install
+```
+
+### 3. Crear archivo `.env`
+
+En la carpeta `api`, crear un archivo llamado `.env` con este contenido:
+
+```env
+DATABASE_URL="file:./dev.db"
+```
+
+Tambien puedes usar como referencia el archivo `api/.env.example`.
+
+### 4. Generar Prisma y cargar datos
+
+Dentro de `api`:
+
+```bash
+./node_modules/.bin/prisma generate
+node prisma/seed.js
+```
+
+En Windows PowerShell tambien puedes usar:
+
+```powershell
+.\node_modules\.bin\prisma generate
+node prisma\seed.js
+```
+
+### 5. Levantar backend
+
+Dentro de `api`:
+
+```bash
+node server.js
+```
+
+Debe aparecer algo como:
+
+```text
+Servidor corriendo en http://localhost:3000
+```
+
+### 6. Levantar frontend
+
+Abrir otra terminal en la raiz del proyecto:
+
+```bash
+./node_modules/.bin/expo start -c
+```
+
+En Windows PowerShell:
+
+```powershell
+.\node_modules\.bin\expo start -c
+```
+
+## Como ejecutar
+
+Cuando Expo inicie:
+
+- presiona `a` para abrir Android Emulator
+- presiona `w` para abrir en navegador
+- o escanea el QR con `Expo Go`
+
+## Usuario demo
+
+Para ingresar:
+
+- Email: `demo@matecamba.bo`
+- Password: `mate1234`
+
+## Nota importante para celular fisico
+
+Si usan `Expo Go` en celular:
+
+- la PC y el celular deben estar en la misma red Wi-Fi
+- el backend debe seguir corriendo en la PC
+
+## Estructura principal
+
+```text
+myapp_lingoapp-main/
+├── app/
+├── api/
+├── assets/
+├── components/
+├── hooks/
+└── services/
+```
+
+## Problemas comunes
+
+### 1. Error de AsyncStorage
+
+Ejecutar otra vez:
+
+```bash
+npm install
+./node_modules/.bin/expo start -c
+```
+
+### 2. Error de Prisma
+
+Dentro de `api`:
+
+```bash
+./node_modules/.bin/prisma generate
+node prisma/seed.js
+```
+
+### 3. La app no conecta al backend
+
+Verificar:
+
+- que `node server.js` siga corriendo en `api`
+- que el celular y la PC esten en la misma red
+- que no haya firewall bloqueando el puerto `3000`
+
+## Estado actual
+
+- login funcionando con usuario demo
+- rutas matematicas cargadas
+- contenido adaptado a Santa Cruz
+- frontend y backend separados

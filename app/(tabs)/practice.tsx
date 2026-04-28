@@ -1,112 +1,212 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
-import { getCourses } from "../../services/api";
+import { Ionicons } from "@expo/vector-icons";
+import { getCourses, getUserProgress } from "../../services/api";
+import { getChallengeTypeLabel, getDifficultyLabel } from "../../constants/learning";
+import { useAppTheme } from "../../hooks/useAppTheme";
+
+interface Lesson {
+  id: number;
+  title: string;
+  summary: string;
+  difficulty: number;
+  challengeType: string;
+  icon: string;
+}
+
+interface Unit {
+  id: number;
+  title: string;
+  lessons: Lesson[];
+}
 
 interface Course {
   id: number;
   title: string;
-  units: { id: number; title: string; lessons: { id: number; title: string }[] }[];
+  units: Unit[];
+}
+
+interface ProgressRecord {
+  lessonId: number;
+  completed: boolean;
 }
 
 export default function PracticeScreen() {
   const router = useRouter();
+  const { theme } = useAppTheme();
   const [courses, setCourses] = useState<Course[]>([]);
-  const userId = 1;
+  const [progressRecords, setProgressRecords] = useState<ProgressRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = async () => {
+    setLoading(true);
+    setError("");
+
     try {
-      const coursesData = await getCourses();
-      const filtered = coursesData.filter((c: Course) => c.units && c.units.length > 0);
+      const [coursesData, progressData] = await Promise.all([getCourses(), getUserProgress()]);
+      const filtered = coursesData.filter((course: Course) => course.units && course.units.length > 0);
       setCourses(filtered);
-    } catch (error) {
-      console.log(error);
+      setProgressRecords(progressData.records || []);
+    } catch (loadError: any) {
+      setError(loadError.message || "No se pudo cargar la práctica");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleLessonPress = (lessonId: number) => {
-    router.push(`/lesson/${lessonId}?userId=${userId}` as any);
-  };
-
-  const lessonPool = courses.flatMap((course) =>
-    course.units.flatMap((unit) =>
-      unit.lessons.map((lesson) => ({
-        ...lesson,
-        courseTitle: course.title,
-        unitTitle: unit.title,
-      }))
-    )
+  const progressMap = useMemo(
+    () => new Map(progressRecords.map((record) => [record.lessonId, record])),
+    [progressRecords]
   );
 
-  const quickCards = [
-    { icon: "🛒", title: "Cambio rápido", desc: "Entrena vueltas y sumas mentales" },
-    { icon: "🚌", title: "Tiempo de micro", desc: "Resuelve minutos y horarios" },
-    { icon: "📐", title: "Medidas del barrio", desc: "Perímetro, áreas y estimación" },
+  const lessonPool = useMemo(
+    () =>
+      courses.flatMap((course) =>
+        course.units.flatMap((unit) =>
+          unit.lessons.map((lesson) => ({
+            ...lesson,
+            courseTitle: course.title,
+            unitTitle: unit.title,
+            completed: !!progressMap.get(lesson.id)?.completed,
+          }))
+        )
+      ),
+    [courses, progressMap]
+  );
+
+  const gameModes = [
+    {
+      key: "multiple_choice",
+      icon: "apps-outline" as const,
+      title: "Selección rápida",
+      desc: "Varias opciones, una respuesta correcta.",
+    },
+    {
+      key: "numeric_input",
+      icon: "keypad-outline" as const,
+      title: "Respuesta numérica",
+      desc: "Escribe el resultado sin ayuda.",
+    },
+    {
+      key: "true_false",
+      icon: "help-circle-outline" as const,
+      title: "Verdadero o falso",
+      desc: "Decide si la afirmación está bien resuelta.",
+    },
+    {
+      key: "sequence_choice",
+      icon: "git-compare-outline" as const,
+      title: "Secuencia lógica",
+      desc: "Ordena pasos para llegar al resultado.",
+    },
   ];
 
+  const launchMode = (type: string) => {
+    const lesson =
+      lessonPool.find((item) => item.challengeType === type && !item.completed) ||
+      lessonPool.find((item) => item.challengeType === type) ||
+      lessonPool.find((item) => !item.completed) ||
+      lessonPool[0];
+    if (lesson) {
+      router.push(`/lesson/${lesson.id}` as any);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.errorContainer, { backgroundColor: theme.background }]}>
+        <Ionicons name="warning-outline" size={42} color={theme.warning} />
+        <Text style={[styles.errorText, { color: theme.textSoft }]}>{error}</Text>
+        <TouchableOpacity style={[styles.retryButton, { backgroundColor: theme.primary }]} onPress={loadData}>
+          <Text style={styles.retryText}>Reintentar</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <Text style={styles.title}>Práctica rápida</Text>
-      <Text style={styles.subtitle}>
-        Retos cortos para mantener ritmo y cálculo mental.
+    <ScrollView style={[styles.container, { backgroundColor: theme.background }]} showsVerticalScrollIndicator={false}>
+      <Text style={[styles.title, { color: theme.text }]}>Juegos de práctica</Text>
+      <Text style={[styles.subtitle, { color: theme.textSoft }]}>
+        Cambia de modo según la habilidad que quieras fortalecer.
       </Text>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Ejercicios Rápidos</Text>
-        {lessonPool.slice(0, 3).map((lesson, index) => (
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>Modos de juego</Text>
+        {gameModes.map((mode) => (
           <TouchableOpacity
-            key={lesson.id}
-            style={styles.quickCard}
-            onPress={() => handleLessonPress(lesson.id)}
+            key={mode.key}
+            style={[styles.quickCard, { backgroundColor: theme.surfaceAccent, borderColor: theme.border }]}
+            onPress={() => launchMode(mode.key)}
           >
-            <Text style={styles.quickIcon}>{quickCards[index]?.icon || "🎯"}</Text>
-            <View style={styles.quickContent}>
-              <Text style={styles.quickTitle}>
-                {quickCards[index]?.title || lesson.title}
-              </Text>
-              <Text style={styles.quickDesc}>
-                {quickCards[index]?.desc || lesson.unitTitle}
-              </Text>
+            <View style={[styles.quickIconWrap, { backgroundColor: theme.surface }]}>
+              <Ionicons name={mode.icon} size={24} color={theme.text} />
             </View>
+            <View style={styles.quickContent}>
+              <Text style={[styles.quickTitle, { color: theme.text }]}>{mode.title}</Text>
+              <Text style={[styles.quickDesc, { color: theme.textSoft }]}>{mode.desc}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={theme.textSoft} />
           </TouchableOpacity>
         ))}
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Lecciones Recientes</Text>
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>Lecciones activas</Text>
         {lessonPool.length > 0 ? (
-          lessonPool.slice(0, 4).map((lesson) => (
+          lessonPool.slice(0, 6).map((lesson) => (
             <TouchableOpacity
               key={lesson.id}
-              style={styles.lessonCard}
-              onPress={() => handleLessonPress(lesson.id)}
+              style={[styles.lessonCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+              onPress={() => router.push(`/lesson/${lesson.id}` as any)}
             >
-              <View style={styles.lessonIcon}>
-                <Text style={styles.lessonEmoji}>📝</Text>
+              <View style={[styles.lessonIcon, { backgroundColor: theme.surfaceAccent }]}>
+                <Ionicons
+                  name={lesson.icon as keyof typeof Ionicons.glyphMap}
+                  size={20}
+                  color={theme.text}
+                />
               </View>
               <View style={styles.lessonContent}>
-                <Text style={styles.lessonTitle}>{lesson.title}</Text>
-                <Text style={styles.lessonCourse}>{lesson.courseTitle}</Text>
+                <Text style={[styles.lessonTitle, { color: theme.text }]}>{lesson.title}</Text>
+                <Text style={[styles.lessonCourse, { color: theme.textSoft }]}>{lesson.courseTitle}</Text>
+                <Text style={[styles.lessonMeta, { color: theme.secondary }]}>
+                  {getChallengeTypeLabel(lesson.challengeType)} · {getDifficultyLabel(lesson.difficulty)}
+                </Text>
               </View>
-              <Text style={styles.arrow}>›</Text>
+              {lesson.completed ? (
+                <Ionicons name="checkmark-circle" size={22} color={theme.primary} />
+              ) : (
+                <Ionicons name="play-circle-outline" size={22} color={theme.secondary} />
+              )}
             </TouchableOpacity>
           ))
         ) : (
-          <Text style={styles.noLessons}>No hay lecciones disponibles</Text>
+          <Text style={[styles.noLessons, { color: theme.textSoft }]}>No hay lecciones disponibles</Text>
         )}
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Estrategia del día</Text>
-        <View style={styles.tipCard}>
-          <Text style={styles.tipEmoji}>💡</Text>
-          <Text style={styles.tipText}>
-            Antes de tocar la calculadora, estima el resultado. Esa es la habilidad
-            que más sirve en compras, transporte y trabajo diario.
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>Consejo táctico</Text>
+        <View style={[styles.tipCard, { backgroundColor: theme.mode === "dark" ? "#172a36" : "#e7f3ff" }]}>
+          <Ionicons name="bulb-outline" size={22} color={theme.secondary} />
+          <Text style={[styles.tipText, { color: theme.secondary }]}>
+            Si fallas en una fase avanzada, vuelve a una lección básica del mismo tema y mejora tu precisión
+            antes de seguir subiendo.
           </Text>
         </View>
       </View>
@@ -117,9 +217,35 @@ export default function PracticeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
     paddingTop: 20,
     paddingHorizontal: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 15,
+    color: "#777",
+    textAlign: "center",
+    marginVertical: 12,
+  },
+  retryButton: {
+    backgroundColor: "#58cc02",
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 16,
+  },
+  retryText: {
+    color: "#fff",
+    fontWeight: "bold",
   },
   title: {
     fontSize: 28,
@@ -128,7 +254,6 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    color: "#777",
     marginBottom: 24,
   },
   section: {
@@ -138,21 +263,23 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
     marginBottom: 16,
-    color: "#333",
   },
   quickCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f6fbf2",
     padding: 16,
     borderRadius: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#dceecb",
   },
-  quickIcon: {
-    fontSize: 32,
-    marginRight: 16,
+  quickIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 14,
   },
   quickContent: {
     flex: 1,
@@ -164,17 +291,14 @@ const styles = StyleSheet.create({
   },
   quickDesc: {
     fontSize: 14,
-    color: "#777",
   },
   lessonCard: {
     flexDirection: "row",
     alignItems: "center",
     padding: 14,
-    borderRadius: 12,
+    borderRadius: 14,
     marginBottom: 10,
-    backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: "#e5e5e5",
   },
   lessonIcon: {
     width: 44,
@@ -185,43 +309,35 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 12,
   },
-  lessonEmoji: {
-    fontSize: 20,
-  },
   lessonContent: {
     flex: 1,
   },
   lessonTitle: {
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   lessonCourse: {
     fontSize: 12,
-    color: "#777",
+    marginTop: 2,
   },
-  arrow: {
-    fontSize: 24,
-    color: "#ccc",
+  lessonMeta: {
+    fontSize: 12,
+    marginTop: 4,
   },
   noLessons: {
     fontSize: 14,
-    color: "#777",
     fontStyle: "italic",
   },
   tipCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#e7f3ff",
+    gap: 12,
     padding: 16,
     borderRadius: 16,
-  },
-  tipEmoji: {
-    fontSize: 24,
-    marginRight: 12,
   },
   tipText: {
     flex: 1,
     fontSize: 14,
-    color: "#1976d2",
+    lineHeight: 20,
   },
 });

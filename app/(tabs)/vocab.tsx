@@ -1,86 +1,134 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useAppTheme } from "../../hooks/useAppTheme";
 
 const challengeData = [
-  { category: "Mercado Abasto", icon: "🛒", items: [
-    { label: "Cambio exacto", detail: "Si pagas Bs 100 y gastas Bs 67, recibes Bs 33." },
-    { label: "Costo por kilos", detail: "2 kg a Bs 9 cada uno cuestan Bs 18." },
-    { label: "Descuento simple", detail: "10% de Bs 80 equivale a Bs 8." },
-  ]},
-  { category: "Micros y trufis", icon: "🚌", items: [
-    { label: "Tiempo transcurrido", detail: "De 07:20 a 07:55 pasan 35 minutos." },
-    { label: "Llegada estimada", detail: "Si sales 08:10 y viajas 25 min, llegas 08:35." },
-    { label: "Frecuencia", detail: "Si el micro pasa cada 12 min, en una hora pasa 5 veces." },
-  ]},
-  { category: "Cancha y patio", icon: "📐", items: [
-    { label: "Perímetro", detail: "Un patio de 8 por 5 m tiene perímetro de 26 m." },
-    { label: "Área", detail: "Una cancha de 20 por 10 m cubre 200 m²." },
-    { label: "Escala", detail: "Si 1 cm representa 1 m, 6 m se dibujan con 6 cm." },
-  ]},
-  { category: "Cocina y porciones", icon: "🍲", items: [
-    { label: "Medias y cuartos", detail: "La mitad de 12 panes son 6 panes." },
-    { label: "Duplicar receta", detail: "Si una receta usa 3 tazas, al duplicar usas 6." },
-    { label: "Fracciones útiles", detail: "1/4 de 20 es 5." },
-  ]},
-  { category: "Clima y datos", icon: "📊", items: [
-    { label: "Comparar temperaturas", detail: "32°C es 4 grados más que 28°C." },
-    { label: "Promedios simples", detail: "Si tus puntajes son 8, 9 y 7, el promedio es 8." },
-    { label: "Lectura rápida", detail: "Si un gráfico sube de 5 a 9, aumentó 4 unidades." },
-  ]},
+  {
+    category: "Mercado y cambio",
+    icon: "cart-outline",
+    items: [
+      { label: "Cambio exacto", detail: "Calcula vueltas y descuentos rápidos sin calculadora." },
+      { label: "Costo por kilos", detail: "Multiplica precios por cantidad con precisión." },
+      { label: "Secuencia de compra", detail: "Ordena pasos para resolver compras compuestas." },
+    ],
+  },
+  {
+    category: "Micros y horarios",
+    icon: "bus-outline",
+    items: [
+      { label: "Tiempo transcurrido", detail: "Resta y suma minutos para llegar a tiempo." },
+      { label: "Llegada estimada", detail: "Predice horarios según duración del trayecto." },
+      { label: "Frecuencia", detail: "Calcula cuántas veces pasa una ruta en un periodo." },
+    ],
+  },
+  {
+    category: "Cancha, patio y medidas",
+    icon: "shapes-outline",
+    items: [
+      { label: "Perímetro", detail: "Bordes, cercos y recorridos." },
+      { label: "Área", detail: "Cobertura de piso, cancha o terreno." },
+      { label: "Conversión", detail: "Pasa de cm a m sin perder contexto." },
+    ],
+  },
+  {
+    category: "Fracciones y porciones",
+    icon: "pie-chart-outline",
+    items: [
+      { label: "Mitad y cuarto", detail: "Porciones exactas para cocina o reparto." },
+      { label: "Duplicar receta", detail: "Aumenta ingredientes con lógica." },
+      { label: "Reparto justo", detail: "Divide cantidades entre grupos." },
+    ],
+  },
+];
+
+const phases = [
+  { title: "Fase 1 · Semillero", detail: "Introduce cálculo mental, cambio y totales básicos." },
+  { title: "Fase 2 · Mercado", detail: "Activa compras, tiempo y lectura de datos simples." },
+  { title: "Fase 3 · Ruta", detail: "Mezcla geometría, fracciones y lógica encadenada." },
+  { title: "Fase 4 · Maestría", detail: "Exige secuencias, precisión y mejor control de error." },
 ];
 
 export default function ChallengeScreen() {
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const { theme } = useAppTheme();
+  const [expanded, setExpanded] = useState<string | null>(challengeData[0].category);
 
   const toggleCategory = (category: string) => {
     setExpanded(expanded === category ? null : category);
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={["bottom"]}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>Desafíos guía</Text>
-        <Text style={styles.subtitle}>Ideas base para practicar matemáticas útiles</Text>
+        <Text style={[styles.title, { color: theme.text }]}>Retos y fases</Text>
+        <Text style={[styles.subtitle, { color: theme.textSoft }]}>
+          Así se organiza la dificultad para que el progreso se sienta justo y creciente.
+        </Text>
 
         <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>15</Text>
-            <Text style={styles.statLabel}>retos{'\n'}modelo</Text>
+          <View style={[styles.statCard, { backgroundColor: theme.surfaceAccent }]}>
+            <Text style={[styles.statNumber, { color: theme.primary }]}>4</Text>
+            <Text style={[styles.statLabel, { color: theme.primary }]}>modos de juego</Text>
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>5</Text>
-            <Text style={styles.statLabel}>contextos</Text>
+          <View style={[styles.statCard, { backgroundColor: theme.surfaceAccent }]}>
+            <Text style={[styles.statNumber, { color: theme.primary }]}>4</Text>
+            <Text style={[styles.statLabel, { color: theme.primary }]}>fases base</Text>
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>100%</Text>
-            <Text style={styles.statLabel}>orientado{'\n'}a la vida real</Text>
+          <View style={[styles.statCard, { backgroundColor: theme.surfaceAccent }]}>
+            <Text style={[styles.statNumber, { color: theme.primary }]}>3★</Text>
+            <Text style={[styles.statLabel, { color: theme.primary }]}>máximo por reto</Text>
           </View>
         </View>
 
-        {challengeData.map((category) => (
-          <View key={category.category} style={styles.categoryCard}>
-            <TouchableOpacity
-              style={styles.categoryHeader}
-              onPress={() => toggleCategory(category.category)}
-            >
-              <Text style={styles.categoryIcon}>{category.icon}</Text>
-              <Text style={styles.categoryTitle}>{category.category}</Text>
-              <Text style={styles.categoryCount}>{category.items.length} retos</Text>
-              <Text style={styles.arrow}>{expanded === category.category ? "▼" : "›"}</Text>
-            </TouchableOpacity>
-
-            {expanded === category.category && (
-              <View style={styles.itemsList}>
-                {category.items.map((item, index) => (
-                  <View key={index} style={styles.itemRow}>
-                    <Text style={styles.itemLabel}>{item.label}</Text>
-                    <Text style={styles.itemDetail}>{item.detail}</Text>
-                  </View>
-                ))}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Fases de avance</Text>
+          {phases.map((phase) => (
+            <View key={phase.title} style={[styles.phaseCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Ionicons name="layers-outline" size={20} color={theme.secondary} />
+              <View style={styles.phaseContent}>
+                <Text style={[styles.phaseTitle, { color: theme.text }]}>{phase.title}</Text>
+                <Text style={[styles.phaseText, { color: theme.textSoft }]}>{phase.detail}</Text>
               </View>
-            )}
-          </View>
-        ))}
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Biblioteca de desafíos</Text>
+          {challengeData.map((category) => (
+            <View key={category.category} style={[styles.categoryCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <TouchableOpacity
+                style={styles.categoryHeader}
+                onPress={() => toggleCategory(category.category)}
+              >
+                <Ionicons
+                  name={category.icon as keyof typeof Ionicons.glyphMap}
+                  size={24}
+                  color={theme.text}
+                />
+                <Text style={[styles.categoryTitle, { color: theme.text }]}>{category.category}</Text>
+                <Text style={[styles.categoryCount, { color: theme.textSoft }]}>{category.items.length} retos</Text>
+                <Ionicons
+                  name={expanded === category.category ? "chevron-down" : "chevron-forward"}
+                  size={18}
+                  color={theme.textSoft}
+                />
+              </TouchableOpacity>
+
+              {expanded === category.category && (
+                <View style={[styles.itemsList, { backgroundColor: theme.surfaceMuted }]}>
+                  {category.items.map((item) => (
+                    <View key={item.label} style={[styles.itemRow, { borderBottomColor: theme.border }]}>
+                      <Text style={[styles.itemLabel, { color: theme.text }]}>{item.label}</Text>
+                      <Text style={[styles.itemDetail, { color: theme.textSoft }]}>{item.detail}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          ))}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -89,7 +137,6 @@ export default function ChallengeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
     padding: 20,
   },
   title: {
@@ -99,20 +146,27 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    color: "#777",
     marginBottom: 20,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 14,
   },
   statsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginBottom: 24,
+    gap: 8,
   },
   statCard: {
     flex: 1,
     backgroundColor: "#dff7c8",
     borderRadius: 16,
     padding: 16,
-    marginHorizontal: 4,
     alignItems: "center",
   },
   statNumber: {
@@ -121,27 +175,44 @@ const styles = StyleSheet.create({
     color: "#58cc02",
   },
   statLabel: {
-    fontSize: 10,
-    color: "#58cc02",
+    fontSize: 11,
+    color: "#4f8a1f",
     textAlign: "center",
     marginTop: 4,
   },
+  phaseCard: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "flex-start",
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  phaseContent: {
+    flex: 1,
+  },
+  phaseTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#173d32",
+  },
+  phaseText: {
+    fontSize: 14,
+    marginTop: 4,
+    lineHeight: 20,
+  },
   categoryCard: {
-    backgroundColor: "#f7fafb",
     borderRadius: 16,
     marginBottom: 12,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#ebf0f2",
   },
   categoryHeader: {
     flexDirection: "row",
     alignItems: "center",
     padding: 16,
-  },
-  categoryIcon: {
-    fontSize: 24,
-    marginRight: 12,
+    gap: 12,
   },
   categoryTitle: {
     flex: 1,
@@ -150,22 +221,14 @@ const styles = StyleSheet.create({
   },
   categoryCount: {
     fontSize: 12,
-    color: "#777",
-    marginRight: 8,
-  },
-  arrow: {
-    fontSize: 18,
-    color: "#777",
   },
   itemsList: {
-    backgroundColor: "#fff",
     paddingHorizontal: 16,
     paddingBottom: 16,
   },
   itemRow: {
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
   },
   itemLabel: {
     fontSize: 14,
@@ -174,6 +237,5 @@ const styles = StyleSheet.create({
   },
   itemDetail: {
     fontSize: 14,
-    color: "#777",
   },
 });

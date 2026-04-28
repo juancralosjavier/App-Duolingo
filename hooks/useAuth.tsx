@@ -1,5 +1,11 @@
-import React, { useState, useEffect, createContext, useContext } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { useState, useEffect, createContext, useContext, useCallback, useMemo } from "react";
+import {
+  clearSession,
+  getAuthToken,
+  getStoredUser,
+  saveSession,
+  saveUser,
+} from "../services/sessionStorage";
 
 export interface User {
   id: number;
@@ -8,6 +14,9 @@ export interface User {
   xp: number;
   hearts: number;
   streak: number;
+  dailyGoal?: number;
+  avatarUrl?: string | null;
+  themePreference?: "light" | "dark";
 }
 
 interface AuthContextType {
@@ -19,101 +28,102 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const USER_STORAGE_KEY = "@matecamba_user";
-const TOKEN_STORAGE_KEY = "@matecamba_token";
-const memoryStorage = new Map<string, string>();
-
-async function getStoredItem(key: string) {
-  try {
-    return await AsyncStorage.getItem(key);
-  } catch (error) {
-    console.log("AsyncStorage unavailable, using memory fallback:", error);
-    return memoryStorage.get(key) ?? null;
-  }
-}
-
-async function setStoredItem(key: string, value: string) {
-  try {
-    await AsyncStorage.setItem(key, value);
-  } catch (error) {
-    console.log("AsyncStorage unavailable, saving in memory:", error);
-    memoryStorage.set(key, value);
-  }
-}
-
-async function removeStoredItem(key: string) {
-  try {
-    await AsyncStorage.removeItem(key);
-  } catch (error) {
-    console.log("AsyncStorage unavailable, clearing memory fallback:", error);
-    memoryStorage.delete(key);
-  }
-}
+const AUTH_STORAGE_TIMEOUT_MS = 1500;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadUser();
-  }, []);
-
-  const loadUser = async () => {
+  const loadUser = useCallback(async () => {
     try {
-      const userJson = await getStoredItem(USER_STORAGE_KEY);
-      if (userJson) {
-        setUser(JSON.parse(userJson));
+      const [storedUser, storedToken] = await Promise.race([
+        Promise.all([getStoredUser(), getAuthToken()]),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Auth storage timeout")), AUTH_STORAGE_TIMEOUT_MS)
+        ),
+      ]);
+
+      if (storedUser && storedToken) {
+        setUser(storedUser);
+      } else {
+        if (storedUser || storedToken) {
+          await clearSession();
+        }
+        setUser(null);
       }
     } catch (error) {
       console.log("Error loading user:", error);
+      setUser(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const signIn = async (userData: User, token: string) => {
+  useEffect(() => {
+    void loadUser();
+  }, [loadUser]);
+
+  const signIn = useCallback(async (userData: User, token: string) => {
     try {
-      await setStoredItem(USER_STORAGE_KEY, JSON.stringify(userData));
-      await setStoredItem(TOKEN_STORAGE_KEY, token);
+      await saveSession(userData, token);
       setUser(userData);
     } catch (error) {
       console.log("Error signing in:", error);
       throw error;
     }
-  };
+  }, []);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     try {
-      await removeStoredItem(USER_STORAGE_KEY);
-      await removeStoredItem(TOKEN_STORAGE_KEY);
+      await clearSession();
       setUser(null);
     } catch (error) {
       console.log("Error signing out:", error);
       throw error;
     }
-  };
+  }, []);
 
-  const updateUser = async (userData: Partial<User>) => {
-    if (!user) return;
-    
+  const updateUser = useCallback(async (userData: Partial<User>) => {
+    let updatedUser: User | null = null;
+
     try {
-      const updatedUser = { ...user, ...userData };
-      await setStoredItem(USER_STORAGE_KEY, JSON.stringify(updatedUser));
-      setUser(updatedUser);
+      setUser((currentUser) => {
+        if (!currentUser) {
+          return currentUser;
+        }
+
+        const nextUser = { ...currentUser, ...userData };
+        const changed = Object.keys(userData).some(
+          (key) => currentUser[key as keyof User] !== nextUser[key as keyof User]
+        );
+
+        if (!changed) {
+          return currentUser;
+        }
+
+        updatedUser = nextUser;
+        return updatedUser;
+      });
+
+      if (updatedUser) {
+        await saveUser(updatedUser);
+      }
     } catch (error) {
       console.log("Error updating user:", error);
       throw error;
     }
-  };
+  }, []);
 
-  const value = {
-    user,
-    loading,
-    signIn,
-    signOut,
-    updateUser,
-  };
+  const value = useMemo(
+    () => ({
+      user,
+      loading,
+      signIn,
+      signOut,
+      updateUser,
+    }),
+    [loading, signIn, signOut, updateUser, user]
+  );
 
   return React.createElement(AuthContext.Provider, { value }, children);
 }

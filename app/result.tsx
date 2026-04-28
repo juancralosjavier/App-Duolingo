@@ -1,74 +1,170 @@
 import React from "react";
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { saveProgress } from "../services/api";
+import { useAuth } from "../hooks/useAuth";
+import { getStarsFromAccuracy } from "../constants/learning";
+import { useAppTheme } from "../hooks/useAppTheme";
+import { useLessonFeedback } from "../hooks/useLessonFeedback";
+
+function Stars({ count }: { count: number }) {
+  return (
+    <View style={styles.starsRow}>
+      {Array.from({ length: 3 }).map((_, index) => (
+        <Ionicons
+          key={`result-star-${index}`}
+          name={index < count ? "star" : "star-outline"}
+          size={24}
+          color="#ffb100"
+        />
+      ))}
+    </View>
+  );
+}
 
 export default function ResultScreen() {
-  const { lessonId, userId, correct, total } = useLocalSearchParams();
+  const { lessonId, courseId, correct, total, difficulty, heartsRemaining, title } = useLocalSearchParams();
   const router = useRouter();
+  const { updateUser } = useAuth();
+  const { theme } = useAppTheme();
+  const { playCorrect, playWrong } = useLessonFeedback();
+  const [saving, setSaving] = React.useState(false);
 
   const correctNum = Number(correct);
   const totalNum = Number(total);
-  const percentage = Math.round((correctNum / totalNum) * 100);
-  const xpGained = correctNum * 10;
-  const passed = percentage >= 70;
+  const difficultyNum = Number(difficulty || 1);
+  const heartsNum = Number(heartsRemaining || 0);
+  const accuracy = totalNum > 0 ? Math.round((correctNum / totalNum) * 100) : 0;
+  const stars = getStarsFromAccuracy(accuracy);
+  const passed = accuracy >= 70 && heartsNum > 0;
+  const xpGained = passed ? correctNum * (8 + difficultyNum * 4) : Math.max(0, correctNum * 2);
+
+  React.useEffect(() => {
+    if (passed) {
+      void playCorrect();
+    } else {
+      void playWrong();
+    }
+  }, [passed, playCorrect, playWrong]);
 
   const handleContinue = async () => {
+    setSaving(true);
+
     try {
-      await saveProgress({
-        userId: Number(userId),
+      const response = await saveProgress({
         lessonId: Number(lessonId),
         completed: passed,
         score: xpGained,
+        accuracy,
+        stars,
       });
+
+      if (response?.user) {
+        await updateUser(response.user);
+      }
     } catch (error) {
       console.log(error);
+    } finally {
+      setSaving(false);
+      if (passed) {
+        router.replace(courseId ? (`/course/${courseId}` as any) : "/(tabs)");
+      } else {
+        router.replace(lessonId ? (`/lesson/${lessonId}` as any) : "/(tabs)");
+      }
     }
-
-    router.replace("/");
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={["bottom"]}>
       <View style={styles.content}>
-        <View style={[styles.resultBadge, passed ? styles.passed : styles.failed]}>
-          <Text style={styles.emoji}>{passed ? "🎉" : "💪"}</Text>
+        <View
+          style={[
+            styles.resultBadge,
+            passed
+              ? [styles.passed, { backgroundColor: theme.mode === "dark" ? "#173320" : "#d7ffb8" }]
+              : [styles.failed, { backgroundColor: theme.mode === "dark" ? "#3a1d22" : "#ffdfe0" }],
+          ]}
+        >
+          <Ionicons
+            name={passed ? "trophy-outline" : "refresh-outline"}
+            size={58}
+            color={passed ? theme.primary : theme.danger}
+          />
         </View>
 
-        <Text style={styles.title}>
-          {passed ? "¡Reto completado!" : "¡Vas bien, inténtalo otra vez!"}
+        <Text style={[styles.title, { color: theme.text }]}>
+          {passed ? "¡Nivel superado!" : "Todavía no subes de fase"}
         </Text>
 
-        <Text style={styles.subtitle}>
+        <Text style={[styles.subtitle, { color: theme.textSoft }]}>
           {passed
-            ? "Sumaste XP y seguiste avanzando en tu ruta matemática."
-            : "Necesitas 70% para aprobar este reto."}
+            ? `Terminaste ${title || "la lección"} y desbloqueaste más avance en la ruta.`
+            : "Necesitas 70% y al menos un corazón para aprobar este reto."}
         </Text>
 
-        <View style={styles.statsContainer}>
+        <Stars count={stars} />
+
+        <View style={[styles.statsContainer, { backgroundColor: theme.surfaceMuted }]}>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{percentage}%</Text>
-            <Text style={styles.statLabel}>Precisión</Text>
+            <View style={[styles.statIconBadge, { backgroundColor: theme.surface }]}>
+              <Ionicons name="analytics-outline" size={18} color={theme.primary} />
+            </View>
+            <Text style={[styles.statValue, { color: theme.primary }]}>{accuracy}%</Text>
+            <Text style={[styles.statLabel, { color: theme.textSoft }]}>Precisión</Text>
           </View>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{correctNum}/{totalNum}</Text>
-            <Text style={styles.statLabel}>Aciertos</Text>
+            <View style={[styles.statIconBadge, { backgroundColor: theme.surface }]}>
+              <Ionicons name="checkmark-done-outline" size={18} color={theme.primary} />
+            </View>
+            <Text style={[styles.statValue, { color: theme.primary }]}>
+              {correctNum}/{totalNum}
+            </Text>
+            <Text style={[styles.statLabel, { color: theme.textSoft }]}>Aciertos</Text>
           </View>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
           <View style={styles.statItem}>
-            <Text style={[styles.statValue, styles.xpValue]}>+{xpGained}</Text>
-            <Text style={styles.statLabel}>XP</Text>
+            <View style={[styles.statIconBadge, { backgroundColor: theme.surface }]}>
+              <Ionicons name="flash-outline" size={18} color={theme.secondary} />
+            </View>
+            <Text style={[styles.statValue, styles.xpValue, { color: theme.secondary }]}>+{xpGained}</Text>
+            <Text style={[styles.statLabel, { color: theme.textSoft }]}>XP</Text>
+          </View>
+        </View>
+
+        <View style={[styles.summaryCard, { backgroundColor: theme.surfaceMuted }]}>
+          <Text style={[styles.summaryTitle, { color: theme.text }]}>Resumen del reto</Text>
+          <View style={styles.summaryRow}>
+            <Ionicons name="layers-outline" size={16} color={theme.secondary} />
+            <Text style={[styles.summaryText, { color: theme.textSoft }]}>Dificultad: nivel {difficultyNum}</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Ionicons name="heart-outline" size={16} color={theme.danger} />
+            <Text style={[styles.summaryText, { color: theme.textSoft }]}>Corazones restantes: {heartsNum}</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Ionicons name="star-outline" size={16} color="#ffb100" />
+            <Text style={[styles.summaryText, { color: theme.textSoft }]}>Estrellas obtenidas: {stars}/3</Text>
           </View>
         </View>
       </View>
 
-      <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
-        <Text style={styles.continueText}>Continuar</Text>
+      <TouchableOpacity
+        style={[styles.continueButton, { backgroundColor: passed ? theme.primary : theme.secondary }]}
+        onPress={handleContinue}
+        disabled={saving}
+      >
+        {saving ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.continueText}>{passed ? "Seguir con la ruta" : "Intentarlo de nuevo"}</Text>
+        )}
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -77,7 +173,6 @@ export default function ResultScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
     padding: 20,
   },
   content: {
@@ -100,9 +195,6 @@ const styles = StyleSheet.create({
   failed: {
     backgroundColor: "#ffdfe0",
   },
-  emoji: {
-    fontSize: 60,
-  },
   title: {
     fontSize: 28,
     fontWeight: "bold",
@@ -113,13 +205,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#777",
     textAlign: "center",
-    marginBottom: 32,
+    marginBottom: 18,
     paddingHorizontal: 20,
+  },
+  starsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 24,
   },
   statsContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f7f7f7",
     borderRadius: 16,
     padding: 20,
     width: "100%",
@@ -128,13 +224,19 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
   },
+  statIconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
   statValue: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#58cc02",
   },
   xpValue: {
-    color: "#2493ee",
   },
   statLabel: {
     fontSize: 14,
@@ -145,6 +247,25 @@ const styles = StyleSheet.create({
     width: 1,
     height: 40,
     backgroundColor: "#ddd",
+  },
+  summaryCard: {
+    width: "100%",
+    borderRadius: 18,
+    padding: 18,
+    marginTop: 18,
+  },
+  summaryTitle: {
+    fontWeight: "800",
+    marginBottom: 10,
+  },
+  summaryText: {
+    marginBottom: 4,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 6,
   },
   continueButton: {
     backgroundColor: "#58cc02",

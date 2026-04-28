@@ -3,71 +3,98 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id        Int            @id @default(autoincrement())
-  name      String
-  email     String         @unique
-  password  String
-  xp        Int            @default(0)
-  hearts    Int            @default(5)
-  streak    Int            @default(0)
-  createdAt DateTime       @default(now())
-  progress  UserProgress[]
+  id              Int            @id @default(autoincrement())
+  name            String
+  email           String         @unique
+  password        String
+  xp              Int            @default(0)
+  hearts          Int            @default(5)
+  streak          Int            @default(0)
+  dailyGoal       Int            @default(3)
+  avatarUrl       String?
+  themePreference String         @default("light")
+  acceptedTermsAt DateTime?
+  createdAt       DateTime       @default(now())
+  progress        UserProgress[]
 }
 
 model Course {
-  id        Int     @id @default(autoincrement())
-  title     String
-  language  String
-  units     Unit[]
+  id         Int     @id @default(autoincrement())
+  title      String
+  language   String
+  summary    String  @default("")
+  icon       String  @default("school-outline")
+  themeColor String  @default("#58CC02")
+  units      Unit[]
 }
 
 model Unit {
-  id        Int      @id @default(autoincrement())
-  title     String
-  order     Int
-  courseId  Int
-  course    Course   @relation(fields: [courseId], references: [id])
-  lessons   Lesson[]
+  id         Int      @id @default(autoincrement())
+  title      String
+  summary    String   @default("")
+  order      Int
+  requiredXp Int      @default(0)
+  courseId   Int
+  course     Course   @relation(fields: [courseId], references: [id])
+  lessons    Lesson[]
 }
 
 model Lesson {
-  id        Int         @id @default(autoincrement())
-  title     String
-  order     Int
-  unitId    Int
-  unit      Unit        @relation(fields: [unitId], references: [id])
-  questions Question[]
+  id            Int            @id @default(autoincrement())
+  title         String
+  summary       String         @default("")
+  order         Int
+  difficulty    Int            @default(1)
+  challengeType String         @default("mixed")
+  requiredStars Int            @default(1)
+  icon          String         @default("school-outline")
+  unitId        Int
+  unit          Unit           @relation(fields: [unitId], references: [id])
+  questions     Question[]
+  progress      UserProgress[]
 }
 
 model Question {
-  id        Int       @id @default(autoincrement())
-  text      String
-  type      String
-  lessonId  Int
-  lesson    Lesson    @relation(fields: [lessonId], references: [id])
-  options   Option[]
+  id          Int       @id @default(autoincrement())
+  text        String
+  type        String
+  explanation String?
+  difficulty  Int       @default(1)
+  order       Int       @default(0)
+  lessonId    Int
+  lesson      Lesson    @relation(fields: [lessonId], references: [id])
+  options     Option[]
 }
 
 model Option {
   id         Int      @id @default(autoincrement())
   text       String
   isCorrect  Boolean  @default(false)
+  sortOrder  Int      @default(0)
   questionId Int
   question   Question @relation(fields: [questionId], references: [id])
 }
 
 model UserProgress {
-  id          Int      @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   userId      Int
   lessonId    Int
-  completed   Boolean  @default(false)
-  score       Int      @default(0)
-  lastPlayed  DateTime @default(now())
+  completed   Boolean   @default(false)
+  score       Int       @default(0)
+  bestScore   Int       @default(0)
+  stars       Int       @default(0)
+  attempts    Int       @default(0)
+  accuracy    Int       @default(0)
+  completedAt DateTime?
+  lastPlayed  DateTime  @default(now())
 
-  user        User     @relation(fields: [userId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+  lesson      Lesson    @relation(fields: [lessonId], references: [id])
+
+  @@unique([userId, lessonId])
 }

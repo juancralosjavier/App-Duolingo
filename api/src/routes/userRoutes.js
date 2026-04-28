@@ -1,15 +1,16 @@
 const express = require("express");
 const router = express.Router();
 const {
-  getUsers,
   register,
   login,
-  getProfile
+  getProfile,
+  updateProfile,
 } = require("../controllers/userController");
+const { requireAuth } = require("../middleware/authMiddleware");
 
-router.get("/", getUsers);
 router.post("/register", register);
 router.post("/login", login);
-router.get("/:id", getProfile);
+router.get("/me", requireAuth, getProfile);
+router.patch("/me", requireAuth, updateProfile);
 
 module.exports = router;

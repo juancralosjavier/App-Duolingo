@@ -1,74 +1,98 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
-import { getCourses } from "../../services/api";
+import { Ionicons } from "@expo/vector-icons";
+import { getCourses, getUserProgress } from "../../services/api";
 import { useAuth } from "../../hooks/useAuth";
+import { getLevelFromXp, getPhaseLabel } from "../../constants/learning";
+import { useAppTheme } from "../../hooks/useAppTheme";
+
+interface LessonLite {
+  id: number;
+}
+
+interface UnitLite {
+  id: number;
+  title: string;
+  lessons?: LessonLite[];
+}
 
 interface Course {
   id: number;
   title: string;
   language: string;
-  units: { id: number; title: string; lessons?: { id: number; title: string }[] }[];
+  summary: string;
+  icon: string;
+  themeColor: string;
+  units: UnitLite[];
 }
 
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { theme } = useAppTheme();
   const [courses, setCourses] = useState<Course[]>([]);
+  const [progressSummary, setProgressSummary] = useState({
+    completedLessons: 0,
+    totalStars: 0,
+    totalAttempts: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadCourses = async () => {
+  const loadCourses = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const data = await getCourses();
-      const filtered = data.filter((c: Course) => c.units && c.units.length > 0);
+      const [coursesData, progressData] = await Promise.all([getCourses(), getUserProgress()]);
+      const filtered = coursesData.filter((course: Course) => course.units && course.units.length > 0);
       setCourses(filtered);
+      setProgressSummary(
+        progressData.summary || {
+          completedLessons: 0,
+          totalStars: 0,
+          totalAttempts: 0,
+        }
+      );
     } catch (err: any) {
-      setError("No se pudo conectar al servidor");
-      console.log(err);
+      setError(err.message || "No se pudo conectar al servidor");
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    loadCourses();
   }, []);
 
-  const getCourseColor = (index: number) => {
-    const colors = ["#e8f7d8", "#fff1c9", "#dff3ff", "#ffe0d5", "#ece8ff"];
-    return colors[index % colors.length];
-  };
-
-  const getCourseEmoji = (index: number) => {
-    const emojis = ["🧮", "📐", "🚌", "🛒", "📊"];
-    return emojis[index % emojis.length];
-  };
+  useEffect(() => {
+    void loadCourses();
+  }, [loadCourses]);
 
   const firstName = user?.name?.split(" ")[0] || "estudiante";
+  const level = getLevelFromXp(user?.xp || 0);
+  const phase = getPhaseLabel(level);
   const featuredCourse = courses[0];
-  const totalLessons = courses.reduce(
-    (sum, course) =>
-      sum + course.units.reduce((unitSum, unit) => unitSum + (unit.lessons?.length || 0), 0),
-    0
+  const totalLessons = useMemo(
+    () =>
+      courses.reduce(
+        (sum, course) =>
+          sum + course.units.reduce((unitSum, unit) => unitSum + (unit.lessons?.length || 0), 0),
+        0
+      ),
+    [courses]
   );
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#58cc02" />
+      <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorIcon}>⚠️</Text>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={loadCourses}>
+      <View style={[styles.errorContainer, { backgroundColor: theme.background }]}>
+        <Ionicons name="warning-outline" size={48} color={theme.warning} />
+        <Text style={[styles.errorText, { color: theme.textSoft }]}>{error}</Text>
+        <TouchableOpacity style={[styles.retryButton, { backgroundColor: theme.primary }]} onPress={loadCourses}>
           <Text style={styles.retryText}>Reintentar</Text>
         </TouchableOpacity>
       </View>
@@ -76,44 +100,72 @@ export default function HomeScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <Text style={styles.title}>Hola, {firstName}</Text>
-      <Text style={styles.subtitle}>
-        Hoy practicamos mates con situaciones del día a día en Santa Cruz.
+    <ScrollView style={[styles.container, { backgroundColor: theme.background }]} showsVerticalScrollIndicator={false}>
+      <Text style={[styles.title, { color: theme.text }]}>Hola, {firstName}</Text>
+      <Text style={[styles.subtitle, { color: theme.textSoft }]}>
+        Estás en {phase}. Hoy toca resolver mates con ritmo, precisión y contexto local.
       </Text>
 
-      <View style={styles.heroCard}>
+      <View style={[styles.heroCard, { backgroundColor: theme.mode === "dark" ? "#11232c" : "#103d2f" }]}>
         <View style={styles.heroContent}>
           <Text style={styles.heroEyebrow}>Meta del día</Text>
-          <Text style={styles.heroTitle}>Resuelve 3 retos y mantén tu racha</Text>
+          <Text style={styles.heroTitle}>Supera 3 retos y gana estrellas</Text>
           <Text style={styles.heroText}>
-            Mercado, micros, medidas y cálculo mental con enfoque local.
+            Mientras más estrellas consigas, más rápido desbloqueas las fases avanzadas.
           </Text>
         </View>
         <View style={styles.heroStats}>
-          <Text style={styles.heroStatValue}>{courses.length}</Text>
-          <Text style={styles.heroStatLabel}>rutas</Text>
-          <Text style={styles.heroStatDivider}>•</Text>
-          <Text style={styles.heroStatValue}>{totalLessons}</Text>
-          <Text style={styles.heroStatLabel}>retos</Text>
+          <View style={styles.heroStatCard}>
+            <Text style={styles.heroStatValue}>{courses.length}</Text>
+            <Text style={styles.heroStatLabel}>rutas</Text>
+          </View>
+          <View style={styles.heroStatCard}>
+            <Text style={styles.heroStatValue}>{totalLessons}</Text>
+            <Text style={styles.heroStatLabel}>retos</Text>
+          </View>
+          <View style={styles.heroStatCard}>
+            <Text style={styles.heroStatValue}>{progressSummary.totalStars}</Text>
+            <Text style={styles.heroStatLabel}>estrellas</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.summaryRow}>
+        <View style={[styles.summaryCard, { backgroundColor: theme.surfaceMuted }]}>
+          <Ionicons name="checkmark-circle-outline" size={20} color={theme.primary} />
+          <Text style={[styles.summaryValue, { color: theme.text }]}>{progressSummary.completedLessons}</Text>
+          <Text style={[styles.summaryLabel, { color: theme.textSoft }]}>lecciones superadas</Text>
+        </View>
+        <View style={[styles.summaryCard, { backgroundColor: theme.surfaceMuted }]}>
+          <Ionicons name="bar-chart-outline" size={20} color={theme.secondary} />
+          <Text style={[styles.summaryValue, { color: theme.text }]}>{progressSummary.totalAttempts}</Text>
+          <Text style={[styles.summaryLabel, { color: theme.textSoft }]}>intentos totales</Text>
         </View>
       </View>
 
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Rutas de aprendizaje</Text>
-        <Text style={styles.sectionHelper}>Tipo Duolingo Math, pero con identidad camba</Text>
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>Rutas de aprendizaje</Text>
+        <Text style={[styles.sectionHelper, { color: theme.textSoft }]}>
+          Cada ruta tiene fases, dificultad y juegos distintos.
+        </Text>
       </View>
 
       <View style={styles.coursesGrid}>
-        {courses.map((course, index) => (
+        {courses.map((course) => (
           <TouchableOpacity
             key={course.id}
-            style={[styles.courseCircle, { backgroundColor: getCourseColor(index) }]}
+            style={[styles.courseCircle, { backgroundColor: `${course.themeColor}18` }]}
             onPress={() => router.push(`/course/${course.id}` as any)}
           >
-            <Text style={styles.courseEmoji}>{getCourseEmoji(index)}</Text>
-            <Text style={styles.courseTitle} numberOfLines={2}>{course.title}</Text>
-            <Text style={styles.courseUnits}>
+            <Ionicons
+              name={course.icon as keyof typeof Ionicons.glyphMap}
+              size={36}
+              color={course.themeColor}
+            />
+            <Text style={styles.courseTitle} numberOfLines={2}>
+              {course.title}
+            </Text>
+            <Text style={[styles.courseUnits, { color: theme.textSoft }]}>
               {course.language} • {course.units.length} unidades
             </Text>
           </TouchableOpacity>
@@ -121,41 +173,37 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Siguiente foco</Text>
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>Siguiente foco</Text>
         <TouchableOpacity
-          style={styles.continueCard}
-          onPress={() =>
-            featuredCourse
-              ? router.push(`/course/${featuredCourse.id}` as any)
-              : undefined
-          }
+          style={[styles.continueCard, { backgroundColor: theme.surfaceAccent }]}
+          onPress={() => (featuredCourse ? router.push(`/course/${featuredCourse.id}` as any) : undefined)}
           disabled={!featuredCourse}
         >
-          <View style={styles.continueIcon}>
-            <Text>🎯</Text>
+          <View style={[styles.continueIcon, { backgroundColor: theme.surface }]}>
+            <Ionicons name="flag-outline" size={22} color={theme.text} />
           </View>
           <View style={styles.continueContent}>
-            <Text style={styles.continueTitle}>
+            <Text style={[styles.continueTitle, { color: theme.text }]}>
               {featuredCourse?.title || "Sin curso disponible"}
             </Text>
-            <Text style={styles.continueProgress}>
+            <Text style={[styles.continueProgress, { color: theme.textSoft }]}>
               {featuredCourse
                 ? `${featuredCourse.units.length} unidades listas para practicar`
                 : "Carga el backend para ver el contenido"}
             </Text>
           </View>
-          <Text style={styles.continueArrow}>›</Text>
+          <Ionicons name="chevron-forward" size={22} color={theme.primary} />
         </TouchableOpacity>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Entrenas hoy</Text>
-        <View style={styles.streakCard}>
-          <Text style={styles.streakEmoji}>📍</Text>
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>Entrenas hoy</Text>
+        <View style={[styles.streakCard, { backgroundColor: theme.mode === "dark" ? "#332913" : "#fff1c9" }]}>
+          <Ionicons name="sparkles-outline" size={28} color={theme.warning} />
           <View style={styles.streakContent}>
-            <Text style={styles.streakDays}>Mercado, tiempo y medidas</Text>
-            <Text style={styles.streakText}>
-              Retos pensados para compras, transporte y espacios del barrio.
+            <Text style={[styles.streakDays, { color: theme.warning }]}>Mercado, tiempo, medidas y lógica</Text>
+            <Text style={[styles.streakText, { color: theme.textSoft }]}>
+              La app ya incluye preguntas numéricas, secuencias, verdadero/falso y selección.
             </Text>
           </View>
         </View>
@@ -167,7 +215,6 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
     paddingTop: 20,
     paddingHorizontal: 20,
   },
@@ -182,15 +229,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20,
   },
-  errorIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
   errorText: {
     fontSize: 16,
     color: "#777",
     textAlign: "center",
-    marginBottom: 20,
+    marginVertical: 20,
   },
   retryButton: {
     backgroundColor: "#58cc02",
@@ -210,14 +253,13 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    color: "#777",
     marginBottom: 20,
   },
   heroCard: {
     backgroundColor: "#103d2f",
     borderRadius: 24,
     padding: 20,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   heroContent: {
     marginBottom: 18,
@@ -243,23 +285,43 @@ const styles = StyleSheet.create({
   },
   heroStats: {
     flexDirection: "row",
-    alignItems: "baseline",
+    gap: 10,
+  },
+  heroStatCard: {
+    flex: 1,
+    backgroundColor: "#174839",
+    borderRadius: 16,
+    padding: 14,
+    alignItems: "center",
   },
   heroStatValue: {
     color: "#fff",
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "800",
   },
   heroStatLabel: {
-    color: "#cce1d8",
-    marginLeft: 6,
-    marginRight: 14,
-    fontSize: 14,
+    color: "#b4d2c3",
+    fontSize: 12,
+    marginTop: 4,
   },
-  heroStatDivider: {
-    color: "#9ddf6f",
-    marginRight: 14,
-    fontSize: 22,
+  summaryRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 24,
+  },
+  summaryCard: {
+    flex: 1,
+    backgroundColor: "#f6fafc",
+    borderRadius: 18,
+    padding: 16,
+  },
+  summaryValue: {
+    fontSize: 24,
+    fontWeight: "800",
+    marginTop: 10,
+  },
+  summaryLabel: {
+    marginTop: 4,
   },
   sectionHeader: {
     marginBottom: 16,
@@ -272,7 +334,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    marginBottom: 30,
+    marginBottom: 26,
   },
   courseCircle: {
     width: "48%",
@@ -283,19 +345,15 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     padding: 18,
   },
-  courseEmoji: {
-    fontSize: 40,
-    marginBottom: 8,
-  },
   courseTitle: {
     fontSize: 14,
     fontWeight: "bold",
     textAlign: "center",
+    marginTop: 10,
     marginBottom: 4,
   },
   courseUnits: {
     fontSize: 12,
-    color: "#666",
     textAlign: "center",
   },
   section: {
@@ -331,33 +389,24 @@ const styles = StyleSheet.create({
   },
   continueProgress: {
     fontSize: 14,
-    color: "#666",
-  },
-  continueArrow: {
-    fontSize: 24,
-    color: "#58cc02",
   },
   streakCard: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 14,
     backgroundColor: "#fff1c9",
     padding: 20,
     borderRadius: 16,
-  },
-  streakEmoji: {
-    fontSize: 34,
-    marginRight: 16,
   },
   streakContent: {
     flex: 1,
   },
   streakDays: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "bold",
-    color: "#9c6400",
   },
   streakText: {
     fontSize: 14,
-    color: "#666",
+    marginTop: 4,
   },
 });

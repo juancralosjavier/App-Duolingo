@@ -3,6 +3,7 @@
     "name": "MateCamba",
     "slug": "matecamba",
     "version": "1.0.0",
+    "description": "App de matematicas estilo Duolingo adaptada a Santa Cruz, Bolivia.",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "matecamba",
@@ -12,6 +13,8 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.juancralosjavier.matecamba",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -27,6 +30,13 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MateCamba necesita acceso a tus fotos para elegir una imagen de perfil.",
+          "cameraPermission": "MateCamba necesita acceso a la cámara para actualizar tu foto de perfil."
+        }
+      ],
       [
         "expo-splash-screen",
         {

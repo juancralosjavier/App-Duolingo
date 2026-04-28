@@ -4,8 +4,9 @@ const {
   saveProgress,
   getUserProgress
 } = require("../controllers/progressController");
+const { requireAuth } = require("../middleware/authMiddleware");
 
-router.post("/", saveProgress);
-router.get("/:userId", getUserProgress);
+router.post("/", requireAuth, saveProgress);
+router.get("/me", requireAuth, getUserProgress);
 
 module.exports = router;

@@ -6,13 +6,12 @@
   "scripts": {
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate deploy",
+    "prisma:push": "prisma db push",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "seed": "prisma generate && node prisma/seed.js"
-  },
-  "prisma": {
-    "seed": "node prisma/seed.js"
+    "seed": "prisma db seed"
   },
   "keywords": [],
   "author": "",

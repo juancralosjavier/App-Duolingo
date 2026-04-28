@@ -15,7 +15,17 @@ const getCourses = async (req, res) => {
             lessons: {
               orderBy: {
                 order: "asc"
-              }
+              },
+              select: {
+                id: true,
+                title: true,
+                order: true,
+                difficulty: true,
+                challengeType: true,
+                requiredStars: true,
+                icon: true,
+                summary: true,
+              },
             }
           }
         }
@@ -23,7 +33,7 @@ const getCourses = async (req, res) => {
     });
 
     res.json(courses);
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ error: "Error al obtener cursos" });
   }
 };
@@ -47,10 +57,14 @@ const getCourseDetail = async (req, res) => {
               include: {
                 questions: {
                   orderBy: {
-                    id: "asc"
+                    order: "asc"
                   },
                   include: {
-                    options: true
+                    options: {
+                      orderBy: {
+                        sortOrder: "asc"
+                      }
+                    }
                   }
                 }
               }
@@ -65,25 +79,8 @@ const getCourseDetail = async (req, res) => {
     }
 
     res.json(course);
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ error: "Error al obtener detalle del curso" });
-  }
-};
-
-const createCourse = async (req, res) => {
-  try {
-    const { title, language } = req.body;
-
-    const course = await prisma.course.create({
-      data: {
-        title,
-        language
-      }
-    });
-
-    res.status(201).json(course);
-  } catch (error) {
-    res.status(500).json({ error: "Error al crear curso" });
   }
 };
 
@@ -94,12 +91,21 @@ const getLessonDetail = async (req, res) => {
     const lesson = await prisma.lesson.findUnique({
       where: { id: lessonId },
       include: {
+        unit: {
+          include: {
+            course: true
+          }
+        },
         questions: {
           orderBy: {
-            id: "asc"
+            order: "asc"
           },
           include: {
-            options: true
+            options: {
+              orderBy: {
+                sortOrder: "asc"
+              }
+            }
           }
         }
       }
@@ -110,14 +116,13 @@ const getLessonDetail = async (req, res) => {
     }
 
     res.json(lesson);
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ error: "Error al obtener lección" });
   }
 };
 
 module.exports = {
   getCourses,
-  createCourse,
   getCourseDetail,
   getLessonDetail
 };

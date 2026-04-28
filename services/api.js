@@ -1,5 +1,6 @@
 import Constants from "expo-constants";
 import { Platform } from "react-native";
+import { getAuthToken } from "./sessionStorage";
 
 const hostUri =
   Constants.expoConfig?.hostUri ||
@@ -19,103 +20,111 @@ const defaultHost =
     : "localhost");
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || `http://${defaultHost}:3000/api`;
+const REQUEST_TIMEOUT_MS = 10000;
 
-export async function getCourses() {
-  const response = await fetch(`${API_URL}/courses`);
+async function apiRequest(path, options = {}, requireAuth = false) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
 
-  if (!response.ok) {
-    throw new Error("No se pudieron obtener los cursos");
+  if (requireAuth) {
+    const token = await getAuthToken();
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
   }
 
-  return await response.json();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let response;
+
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    clearTimeout(timeoutId);
+
+    if (error?.name === "AbortError") {
+      throw new Error(
+        "La solicitud tardó demasiado. Revisa que el backend esté corriendo y que el celular esté en la misma red."
+      );
+    }
+
+    throw error;
+  }
+
+  clearTimeout(timeoutId);
+
+  const text = await response.text();
+  let data = null;
+
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch (_error) {
+      data = { error: text };
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.error || "No se pudo completar la solicitud");
+  }
+
+  return data;
+}
+
+export async function getCourses() {
+  return await apiRequest("/courses");
 }
 
 export async function getCourseDetail(id) {
-  const response = await fetch(`${API_URL}/courses/${id}`);
-
-  if (!response.ok) {
-    throw new Error("No se pudo obtener el detalle del curso");
-  }
-
-  return await response.json();
+  return await apiRequest(`/courses/${id}`);
 }
 
 export async function saveProgress(progress) {
-  const response = await fetch(`${API_URL}/progress`, {
+  return await apiRequest("/progress", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
     body: JSON.stringify(progress),
-  });
-
-  if (!response.ok) {
-    throw new Error("No se pudo guardar el progreso");
-  }
-
-  return await response.json();
+  }, true);
 }
 
-export async function getUserProgress(userId) {
-  const response = await fetch(`${API_URL}/progress/${userId}`);
-
-  if (!response.ok) {
-    throw new Error("No se pudo obtener el progreso del usuario");
-  }
-
-  return await response.json();
+export async function getUserProgress() {
+  return await apiRequest("/progress/me", {}, true);
 }
 
 export async function getLessonDetail(lessonId) {
-  const response = await fetch(`${API_URL}/lessons/${lessonId}`);
-
-  if (!response.ok) {
-    throw new Error("No se pudo obtener la lección");
-  }
-
-  return await response.json();
+  return await apiRequest(`/lessons/${lessonId}`);
 }
 
 export async function register(user) {
-  const response = await fetch(`${API_URL}/users/register`, {
+  return await apiRequest("/users/register", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
     body: JSON.stringify(user),
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "No se pudo registrar");
-  }
-
-  return await response.json();
 }
 
 export async function loginUser(email, password) {
-  const response = await fetch(`${API_URL}/users/login`, {
+  return await apiRequest("/users/login", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
     body: JSON.stringify({ email, password }),
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "No se pudo iniciar sesión");
-  }
-
-  return await response.json();
 }
 
-export async function getUserProfile(userId) {
-  const response = await fetch(`${API_URL}/users/${userId}`);
+export async function getUserProfile() {
+  return await apiRequest("/users/me", {}, true);
+}
 
-  if (!response.ok) {
-    throw new Error("No se pudo obtener el perfil");
-  }
-
-  return await response.json();
+export async function updateUserProfile(payload) {
+  return await apiRequest(
+    "/users/me",
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+    true
+  );
 }

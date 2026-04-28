@@ -1,48 +1,63 @@
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from "react-native";
-
-const { width } = Dimensions.get("window");
-const NODE_SIZE = 60;
-const PATH_WIDTH = 4;
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { getDifficultyLabel, getChallengeTypeLabel } from "../constants/learning";
+import { useAppTheme } from "../hooks/useAppTheme";
 
 interface LessonNode {
   id: number;
   title: string;
+  summary: string;
   completed: boolean;
   locked: boolean;
   isCurrent: boolean;
+  stars: number;
+  requiredStars: number;
+  difficulty: number;
+  icon: string;
+  challengeType: string;
 }
 
 interface LessonPathProps {
   units: {
     id: number;
     title: string;
+    summary: string;
+    requiredXp: number;
     lessons: LessonNode[];
   }[];
   onLessonPress: (lessonId: number) => void;
 }
 
+function renderStars(stars: number) {
+  return Array.from({ length: 3 }).map((_, index) => (
+    <Ionicons
+      key={`star-${index}`}
+      name={index < stars ? "star" : "star-outline"}
+      size={12}
+      color={index < stars ? "#ffb100" : "#ced8dc"}
+    />
+  ));
+}
+
 export default function LessonPath({ units, onLessonPress }: LessonPathProps) {
-  const renderConnectionLine = (index: number, isVertical: boolean = true) => {
-    return (
-      <View
-        style={[
-          styles.connectionLine,
-          isVertical ? styles.verticalLine : styles.horizontalLine,
-        ]}
-      />
-    );
-  };
+  const { theme } = useAppTheme();
 
   return (
     <View style={styles.container}>
-      {units.map((unit, unitIndex) => (
+      {units.map((unit) => (
         <View key={unit.id} style={styles.unitContainer}>
-          <Text style={styles.unitTitle}>{unit.title}</Text>
-          
+          <View style={styles.unitHeader}>
+            <Text style={[styles.unitTitle, { color: theme.text }]}>{unit.title}</Text>
+            <Text style={[styles.unitSummary, { color: theme.textSoft }]}>{unit.summary}</Text>
+            <Text style={[styles.unitRequirement, { color: theme.secondary }]}>
+              Desbloqueo sugerido: {unit.requiredXp} XP
+            </Text>
+          </View>
+
           <View style={styles.pathContainer}>
             {unit.lessons.map((lesson, lessonIndex) => (
-              <View key={lesson.id}>
+              <View key={lesson.id} style={styles.lessonRow}>
                 <TouchableOpacity
                   style={[
                     styles.node,
@@ -53,21 +68,57 @@ export default function LessonPath({ units, onLessonPress }: LessonPathProps) {
                   onPress={() => !lesson.locked && onLessonPress(lesson.id)}
                   disabled={lesson.locked}
                 >
-                  <Text style={styles.nodeIcon}>
-                    {lesson.completed ? "✓" : lesson.isCurrent ? "▶" : lesson.locked ? "🔒" : lessonIndex + 1}
-                  </Text>
+                  <Ionicons
+                    name={
+                      lesson.locked
+                        ? "lock-closed"
+                        : lesson.completed
+                        ? "checkmark"
+                        : lesson.isCurrent
+                        ? "play"
+                        : (lesson.icon as keyof typeof Ionicons.glyphMap)
+                    }
+                    size={18}
+                    color="#fff"
+                  />
                 </TouchableOpacity>
-                
-                {lessonIndex < unit.lessons.length - 1 && (
-                  <View style={styles.nodeConnector}>
-                    <View
-                      style={[
-                        styles.connectorLine,
-                        lesson.completed && styles.completedConnector,
-                      ]}
-                    />
+
+                <TouchableOpacity
+                  style={[
+                    styles.card,
+                    {
+                      backgroundColor: theme.surface,
+                      borderColor: theme.border,
+                    },
+                    lesson.locked && styles.cardLocked,
+                    lesson.isCurrent && [styles.cardCurrent, { borderColor: theme.secondary, backgroundColor: theme.backgroundAlt }],
+                  ]}
+                  onPress={() => !lesson.locked && onLessonPress(lesson.id)}
+                  disabled={lesson.locked}
+                >
+                  <View style={styles.cardTop}>
+                    <Text style={[styles.lessonTitle, { color: theme.text }]}>{lesson.title}</Text>
+                    <View style={styles.starsRow}>{renderStars(lesson.stars)}</View>
                   </View>
-                )}
+
+                  <Text style={[styles.lessonSummary, { color: theme.textSoft }]}>{lesson.summary}</Text>
+
+                  <View style={styles.metaRow}>
+                    <Text style={[styles.metaPill, { backgroundColor: theme.surfaceMuted, color: theme.textSoft }]}>
+                      {getDifficultyLabel(lesson.difficulty)}
+                    </Text>
+                    <Text style={[styles.metaPill, { backgroundColor: theme.surfaceMuted, color: theme.textSoft }]}>
+                      {getChallengeTypeLabel(lesson.challengeType)}
+                    </Text>
+                    <Text style={[styles.metaPill, { backgroundColor: theme.surfaceMuted, color: theme.textSoft }]}>
+                      Meta {lesson.requiredStars}★
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                {lessonIndex < unit.lessons.length - 1 ? (
+                  <View style={[styles.connectorLine, { backgroundColor: theme.border }]} />
+                ) : null}
               </View>
             ))}
           </View>
@@ -79,71 +130,114 @@ export default function LessonPath({ units, onLessonPress }: LessonPathProps) {
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
+    paddingVertical: 10,
   },
   unitContainer: {
-    marginBottom: 32,
+    marginBottom: 30,
+  },
+  unitHeader: {
+    marginBottom: 14,
   },
   unitTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#58cc02",
-    marginBottom: 16,
-    textAlign: "center",
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#173d32",
+  },
+  unitSummary: {
+    color: "#687a83",
+    marginTop: 4,
+  },
+  unitRequirement: {
+    color: "#2493ee",
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: "700",
   },
   pathContainer: {
-    alignItems: "center",
+    gap: 12,
+  },
+  lessonRow: {
+    position: "relative",
+    paddingLeft: 36,
   },
   node: {
-    width: NODE_SIZE,
-    height: NODE_SIZE,
-    borderRadius: NODE_SIZE / 2,
-    backgroundColor: "#e5e5e5",
+    position: "absolute",
+    left: 0,
+    top: 14,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#d0d8dd",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 3,
-    borderColor: "#ccc",
+    zIndex: 2,
   },
   completedNode: {
     backgroundColor: "#58cc02",
-    borderColor: "#46a302",
   },
   currentNode: {
     backgroundColor: "#2493ee",
-    borderColor: "#1a7cc7",
   },
   lockedNode: {
-    backgroundColor: "#e5e5e5",
-    borderColor: "#ccc",
-    opacity: 0.6,
-  },
-  nodeIcon: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#fff",
-  },
-  nodeConnector: {
-    height: 20,
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: "#c7d0d5",
   },
   connectorLine: {
-    width: PATH_WIDTH,
-    height: 20,
-    backgroundColor: "#ccc",
+    position: "absolute",
+    left: 13,
+    top: 42,
+    width: 3,
+    height: 56,
+    backgroundColor: "#dfe7ea",
+    borderRadius: 99,
   },
-  completedConnector: {
-    backgroundColor: "#58cc02",
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#e6eef1",
   },
-  connectionLine: {
-    backgroundColor: "#58cc02",
+  cardLocked: {
+    opacity: 0.65,
   },
-  verticalLine: {
-    width: PATH_WIDTH,
-    height: 30,
+  cardCurrent: {
+    borderColor: "#2493ee",
+    backgroundColor: "#f5fbff",
   },
-  horizontalLine: {
-    height: PATH_WIDTH,
-    width: 30,
+  cardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  lessonTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#173d32",
+  },
+  starsRow: {
+    flexDirection: "row",
+    gap: 2,
+  },
+  lessonSummary: {
+    color: "#61717b",
+    marginTop: 8,
+    lineHeight: 20,
+  },
+  metaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 12,
+  },
+  metaPill: {
+    backgroundColor: "#f1f6f8",
+    color: "#50636d",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: "700",
   },
 });

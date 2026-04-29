@@ -4,9 +4,11 @@ require("dotenv").config();
 const prisma = require("./src/lib/prisma");
 
 const app = express();
+const JSON_BODY_LIMIT = "8mb";
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
 
 const userRoutes = require("./src/routes/userRoutes");
 const courseRoutes = require("./src/routes/courseRoutes");
@@ -24,6 +26,23 @@ app.get("/health", (req, res) => {
 
 app.get("/", (req, res) => {
   res.json({ message: "API de MateCamba funcionando" });
+});
+
+app.use((err, req, res, next) => {
+  if (err?.type === "entity.too.large") {
+    return res.status(413).json({
+      error: "La foto es demasiado pesada. Elige una imagen más ligera."
+    });
+  }
+
+  if (err) {
+    console.error(err);
+    return res.status(500).json({
+      error: "Ocurrió un error inesperado en la API."
+    });
+  }
+
+  next();
 });
 
 const PORT = process.env.PORT || 3000;

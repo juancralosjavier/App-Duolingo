@@ -51,6 +51,25 @@ function buildTimeoutMessage() {
     : "La solicitud tardó demasiado. Revisa que el backend esté corriendo y que el celular esté en la misma red.";
 }
 
+function mapServerError(response, data, text) {
+  const normalizedText = `${text || ""}`.toLowerCase();
+  const normalizedError = `${data?.error || ""}`.toLowerCase();
+
+  if (
+    response.status === 413 ||
+    normalizedText.includes("payload too large") ||
+    normalizedError.includes("payload too large")
+  ) {
+    return "La foto es demasiado pesada. Elige una imagen más ligera.";
+  }
+
+  if (normalizedText.includes("<!doctype html>") || normalizedText.includes("<html")) {
+    return "La API devolvió una respuesta no válida. Vuelve a intentarlo en unos segundos.";
+  }
+
+  return data?.error || "No se pudo completar la solicitud";
+}
+
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -172,7 +191,7 @@ async function apiRequest(path, options = {}, requireAuth = false) {
     }
 
     if (!response.ok) {
-      throw new Error(data?.error || "No se pudo completar la solicitud");
+      throw new Error(mapServerError(response, data, text));
     }
 
     return data;

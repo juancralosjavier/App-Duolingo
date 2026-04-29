@@ -4,6 +4,7 @@ const bcrypt = require("bcryptjs");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const MAX_SESSION_AVATAR_LENGTH = 4096;
+const MAX_AVATAR_UPLOAD_LENGTH = 2_500_000;
 
 const buildToken = (user) =>
   jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, {
@@ -22,6 +23,19 @@ const sanitizeAvatarForSession = (avatarUrl) => {
   return avatarUrl;
 };
 
+const normalizeAvatarUrl = (avatarUrl) => {
+  if (avatarUrl === null || avatarUrl === undefined) {
+    return null;
+  }
+
+  if (typeof avatarUrl !== "string") {
+    return avatarUrl;
+  }
+
+  const trimmedAvatarUrl = avatarUrl.trim();
+  return trimmedAvatarUrl.length > 0 ? trimmedAvatarUrl : null;
+};
+
 const toSessionUserPayload = (user) => ({
   id: user.id,
   name: user.name,
@@ -32,6 +46,19 @@ const toSessionUserPayload = (user) => ({
   dailyGoal: user.dailyGoal,
   avatarUrl: sanitizeAvatarForSession(user.avatarUrl),
   themePreference: user.themePreference,
+});
+
+const toProfileUserPayload = (user, extras = {}) => ({
+  id: user.id,
+  name: user.name,
+  email: user.email,
+  xp: user.xp,
+  hearts: user.hearts,
+  streak: user.streak,
+  dailyGoal: user.dailyGoal,
+  avatarUrl: normalizeAvatarUrl(user.avatarUrl),
+  themePreference: user.themePreference,
+  ...extras,
 });
 
 const register = async (req, res) => {
@@ -202,18 +229,11 @@ const getProfile = async (req, res) => {
     }
 
     res.json({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      xp: user.xp,
-      hearts: user.hearts,
-      streak: user.streak,
-      dailyGoal: user.dailyGoal,
-      avatarUrl: user.avatarUrl,
-      themePreference: user.themePreference,
-      acceptedTermsAt: user.acceptedTermsAt,
-      completedLessons,
-      totalStars: progressAggregate._sum.stars ?? 0,
+      ...toProfileUserPayload(user, {
+        acceptedTermsAt: user.acceptedTermsAt,
+        completedLessons,
+        totalStars: progressAggregate._sum.stars ?? 0,
+      }),
     });
   } catch (_error) {
     res.status(500).json({ error: "Error al obtener perfil" });
@@ -235,7 +255,19 @@ const updateProfile = async (req, res) => {
     }
 
     if (typeof avatarUrl === "string" || avatarUrl === null) {
-      data.avatarUrl = avatarUrl;
+      const normalizedAvatarUrl = normalizeAvatarUrl(avatarUrl);
+
+      if (
+        normalizedAvatarUrl &&
+        normalizedAvatarUrl.startsWith("data:") &&
+        normalizedAvatarUrl.length > MAX_AVATAR_UPLOAD_LENGTH
+      ) {
+        return res.status(413).json({
+          error: "La foto es demasiado pesada. Elige una imagen más ligera."
+        });
+      }
+
+      data.avatarUrl = normalizedAvatarUrl;
     }
 
     if (typeof dailyGoal === "number") {
@@ -257,7 +289,10 @@ const updateProfile = async (req, res) => {
       data,
     });
 
-    res.json({ user: toSessionUserPayload(updatedUser) });
+    res.json({
+      user: toSessionUserPayload(updatedUser),
+      profile: toProfileUserPayload(updatedUser),
+    });
   } catch (_error) {
     res.status(500).json({ error: "Error al actualizar el perfil" });
   }

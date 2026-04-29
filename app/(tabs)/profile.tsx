@@ -49,6 +49,18 @@ function buildFallbackProfile(user: User): UserProfile {
   };
 }
 
+function sanitizeAvatarForSession(avatarUrl?: string | null) {
+  if (!avatarUrl) {
+    return null;
+  }
+
+  if (avatarUrl.startsWith("data:") && avatarUrl.length > 4096) {
+    return null;
+  }
+
+  return avatarUrl;
+}
+
 export default function ProfileScreen() {
   const router = useRouter();
   const { user: sessionUser, loading: authLoading, signOut, updateUser } = useAuth();
@@ -83,7 +95,7 @@ export default function ProfileScreen() {
         hearts: data.hearts,
         streak: data.streak,
         dailyGoal: data.dailyGoal,
-        avatarUrl: data.avatarUrl,
+        avatarUrl: sanitizeAvatarForSession(data.avatarUrl),
         themePreference: data.themePreference,
       });
     } catch (fetchError: any) {
@@ -172,9 +184,16 @@ export default function ProfileScreen() {
     ]);
   };
 
-  const syncProfileUser = async (nextUser: Partial<UserProfile>) => {
-    setProfile((current) => (current ? { ...current, ...nextUser } : current));
-    await updateUser(nextUser);
+  const syncProfileUser = async (
+    nextProfileUser: Partial<UserProfile>,
+    nextSessionUser?: Partial<UserProfile>
+  ) => {
+    setProfile((current) => (current ? { ...current, ...nextProfileUser } : current));
+    const sessionPayload = nextSessionUser ?? nextProfileUser;
+    await updateUser({
+      ...sessionPayload,
+      avatarUrl: sanitizeAvatarForSession(sessionPayload.avatarUrl),
+    });
   };
 
   const saveName = async () => {
@@ -188,7 +207,7 @@ export default function ProfileScreen() {
     setSavingName(true);
     try {
       const response = await updateUserProfile({ name: trimmedName });
-      await syncProfileUser(response.user);
+      await syncProfileUser(response.profile ?? response.user, response.user);
       setEditingName(false);
     } catch (saveError: any) {
       Alert.alert("No se pudo actualizar", saveError.message || "Error al guardar el nombre.");
@@ -210,7 +229,7 @@ export default function ProfileScreen() {
         mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.4,
+        quality: 0.2,
         base64: true,
       });
 
@@ -219,12 +238,22 @@ export default function ProfileScreen() {
       }
 
       const asset = result.assets[0];
+      const estimatedBase64Length = asset.base64?.length ?? 0;
+
+      if (estimatedBase64Length > 2_500_000) {
+        Alert.alert(
+          "Foto muy pesada",
+          "Elige una imagen más ligera o recórtala mejor antes de subirla."
+        );
+        return;
+      }
+
       const avatarUrl = asset.base64
         ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}`
         : asset.uri;
 
       const response = await updateUserProfile({ avatarUrl });
-      await syncProfileUser(response.user);
+      await syncProfileUser(response.profile ?? response.user, response.user);
     } catch (photoError: any) {
       Alert.alert("No se pudo cambiar la foto", photoError.message || "Vuelve a intentarlo.");
     } finally {
@@ -236,7 +265,7 @@ export default function ProfileScreen() {
     setSavingPhoto(true);
     try {
       const response = await updateUserProfile({ avatarUrl: null });
-      await syncProfileUser(response.user);
+      await syncProfileUser(response.profile ?? response.user, response.user);
     } catch (photoError: any) {
       Alert.alert("No se pudo quitar la foto", photoError.message || "Vuelve a intentarlo.");
     } finally {
@@ -249,7 +278,7 @@ export default function ProfileScreen() {
     setSavingGoal(true);
     try {
       const response = await updateUserProfile({ dailyGoal: nextGoal });
-      await syncProfileUser(response.user);
+      await syncProfileUser(response.profile ?? response.user, response.user);
     } catch (goalError: any) {
       Alert.alert("No se pudo actualizar la meta", goalError.message || "Vuelve a intentarlo.");
     } finally {
@@ -265,7 +294,7 @@ export default function ProfileScreen() {
     try {
       await setThemeName(nextTheme);
       const response = await updateUserProfile({ themePreference: nextTheme });
-      await syncProfileUser(response.user);
+      await syncProfileUser(response.profile ?? response.user, response.user);
     } catch (themeError: any) {
       await setThemeName(previousTheme);
       Alert.alert("No se pudo cambiar el tema", themeError.message || "Vuelve a intentarlo.");

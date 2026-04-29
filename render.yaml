@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: "API de Matecamba"
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: api
+    buildCommand: npm install
+    preDeployCommand: npm run prisma:push
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true

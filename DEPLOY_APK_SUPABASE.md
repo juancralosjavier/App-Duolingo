@@ -143,7 +143,7 @@ Archivo sugerido:
 Contenido:
 
 ```env
-EXPO_PUBLIC_API_URL="https://tu-backend-publico.example.com/api"
+EXPO_PUBLIC_API_URL="https://matecamba-api.onrender.com/api"
 ```
 
 ### Backend
@@ -155,10 +155,22 @@ Archivo sugerido:
 Contenido para Supabase:
 
 ```env
-DATABASE_URL="postgres://prisma.[PROJECT-REF]:[PRISMA_PASSWORD]@[DB-REGION].pooler.supabase.com:5432/postgres"
+DATABASE_URL="postgresql://postgres.tlikumeruokrxccqeacj:[TU-PASSWORD]@aws-1-us-east-1.pooler.supabase.com:5432/postgres"
 JWT_SECRET="cambia-esta-clave-por-una-segura"
 PORT=3000
 ```
+
+## Configuracion actual de Render
+
+El backend ya puede desplegarse como servicio web en Render con:
+
+- `Directorio raiz`: `api`
+- `Comando de compilacion`: `npm install`
+- `Comando previo al despliegue`: `npm run prisma:push`
+- `Comando de inicio`: `npm start`
+- `Ruta de salud`: `/health`
+
+La configuracion declarativa vive en `render.yaml`.
 
 ## Lo que te recomiendo hacer ahora
 

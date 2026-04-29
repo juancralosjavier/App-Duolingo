@@ -50,6 +50,9 @@
         }
       ]
     ],
+    "extra": {
+      "apiUrl": "https://matecamba-api.onrender.com/api"
+    },
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

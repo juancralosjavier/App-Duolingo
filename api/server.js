@@ -33,7 +33,8 @@ async function startServer() {
     await prisma.$queryRaw`SELECT 1`;
 
     app.listen(PORT, () => {
-      console.log(`Servidor corriendo en http://localhost:${PORT}`);
+      //console.log(`Servidor corriendo en http://localhost:${PORT}`);
+      console.log(`Servidor corriendo en puerto ${PORT}`);
     });
   } catch (error) {
     console.error("No se pudo iniciar la API porque fallo la conexion a la base de datos.");

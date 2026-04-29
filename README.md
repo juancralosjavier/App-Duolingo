@@ -5,7 +5,7 @@ Aplicacion movil inspirada en Duolingo Math, adaptada a un contexto de Santa Cru
 El proyecto tiene dos partes:
 
 - `app`: frontend con `Expo + React Native`
-- `api`: backend con `Express + Prisma + SQLite`
+- `api`: backend con `Express + Prisma + PostgreSQL (Supabase)`
 
 ## Repositorio
 
@@ -52,12 +52,23 @@ npm install
 En la carpeta `api`, crear un archivo llamado `.env` con este contenido:
 
 ```env
-DATABASE_URL="file:./dev.db"
+DATABASE_URL="postgresql://postgres.tlikumeruokrxccqeacj:[TU-PASSWORD]@aws-1-us-east-1.pooler.supabase.com:5432/postgres"
+JWT_SECRET="cambia-esta-clave-por-una-segura"
 ```
 
-Tambien puedes usar como referencia el archivo `api/.env.example`.
+Tambien puedes usar como referencia el archivo `api/.env.supabase.example`.
 
-### 4. Generar Prisma y cargar datos
+### 4. Configurar la URL del backend para el frontend
+
+En la raiz del proyecto puedes crear un archivo `.env` con:
+
+```env
+EXPO_PUBLIC_API_URL="https://matecamba-api.onrender.com/api"
+```
+
+Si trabajas solo en local, puedes omitirlo y la app intentara usar la API local.
+
+### 5. Generar Prisma y cargar datos
 
 Dentro de `api`:
 
@@ -73,7 +84,7 @@ En Windows PowerShell tambien puedes usar:
 node prisma\seed.js
 ```
 
-### 5. Levantar backend
+### 6. Levantar backend
 
 Dentro de `api`:
 
@@ -87,7 +98,7 @@ Debe aparecer algo como:
 Servidor corriendo en http://localhost:3000
 ```
 
-### 6. Levantar frontend
+### 7. Levantar frontend
 
 Abrir otra terminal en la raiz del proyecto:
 
@@ -121,7 +132,7 @@ Para ingresar:
 Si usan `Expo Go` en celular:
 
 - la PC y el celular deben estar en la misma red Wi-Fi
-- el backend debe seguir corriendo en la PC
+- el backend debe seguir corriendo en la PC, o el frontend debe apuntar al backend publico en Render
 
 ## Estructura principal
 
@@ -162,6 +173,7 @@ Verificar:
 - que `node server.js` siga corriendo en `api`
 - que el celular y la PC esten en la misma red
 - que no haya firewall bloqueando el puerto `3000`
+- que `EXPO_PUBLIC_API_URL` apunte a `https://matecamba-api.onrender.com/api` si quieres usar el backend desplegado
 
 ## Estado actual
 
@@ -169,3 +181,34 @@ Verificar:
 - rutas matematicas cargadas
 - contenido adaptado a Santa Cruz
 - frontend y backend separados
+
+## Despliegue en Render
+
+El repo ya incluye `render.yaml` con la configuracion base del backend.
+
+Valores clave para Render:
+
+- `Directorio raiz`: `api`
+- `Comando de compilacion`: `npm install`
+- `Comando previo al despliegue`: `npm run prisma:push`
+- `Comando de inicio`: `npm start`
+- `Ruta de salud`: `/health`
+
+Variables necesarias en Render:
+
+- `DATABASE_URL`: cadena completa de PostgreSQL de Supabase
+- `JWT_SECRET`: clave privada para firmar tokens
+- `NODE_ENV`: `production`
+
+Backend publico actual:
+
+```text
+https://matecamba-api.onrender.com
+```
+
+Pruebas utiles:
+
+```text
+https://matecamba-api.onrender.com/health
+https://matecamba-api.onrender.com/api/courses
+```

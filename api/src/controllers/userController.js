@@ -3,13 +3,26 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 
 const JWT_SECRET = process.env.JWT_SECRET;
+const MAX_SESSION_AVATAR_LENGTH = 4096;
 
 const buildToken = (user) =>
   jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, {
     expiresIn: "7d"
   });
 
-const toUserPayload = (user) => ({
+const sanitizeAvatarForSession = (avatarUrl) => {
+  if (!avatarUrl) {
+    return null;
+  }
+
+  if (avatarUrl.startsWith("data:") && avatarUrl.length > MAX_SESSION_AVATAR_LENGTH) {
+    return null;
+  }
+
+  return avatarUrl;
+};
+
+const toSessionUserPayload = (user) => ({
   id: user.id,
   name: user.name,
   email: user.email,
@@ -17,19 +30,26 @@ const toUserPayload = (user) => ({
   hearts: user.hearts,
   streak: user.streak,
   dailyGoal: user.dailyGoal,
-  avatarUrl: user.avatarUrl,
+  avatarUrl: sanitizeAvatarForSession(user.avatarUrl),
   themePreference: user.themePreference,
 });
 
 const register = async (req, res) => {
   try {
-    const { name, email, password, acceptedTerms } = req.body;
+    const {
+      name = "",
+      email = "",
+      password = "",
+      acceptedTerms,
+    } = req.body ?? {};
+    const normalizedEmail = email.trim().toLowerCase();
+    const trimmedName = name.trim();
 
-    if (!name || !email || !password) {
+    if (!trimmedName || !normalizedEmail || !password) {
       return res.status(400).json({ error: "Nombre, email y contraseña son obligatorios" });
     }
 
-    if (!/\S+@\S+\.\S+/.test(email)) {
+    if (!/\S+@\S+\.\S+/.test(normalizedEmail)) {
       return res.status(400).json({ error: "Ingresa un email válido" });
     }
 
@@ -41,7 +61,7 @@ const register = async (req, res) => {
       return res.status(400).json({ error: "Debes aceptar los términos y condiciones" });
     }
 
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (existing) {
       return res.status(400).json({ error: "El email ya está registrado" });
     }
@@ -50,8 +70,8 @@ const register = async (req, res) => {
 
     const user = await prisma.user.create({
       data: {
-        name,
-        email,
+        name: trimmedName,
+        email: normalizedEmail,
         password: hashedPassword,
         acceptedTermsAt: new Date(),
         themePreference: "light",
@@ -59,7 +79,7 @@ const register = async (req, res) => {
     });
 
     const token = buildToken(user);
-    res.status(201).json({ user: toUserPayload(user), token });
+    res.status(201).json({ user: toSessionUserPayload(user), token });
   } catch (_error) {
     res.status(500).json({ error: "Error al registrar usuario" });
   }
@@ -67,9 +87,14 @@ const register = async (req, res) => {
 
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email = "", password = "" } = req.body ?? {};
+    const normalizedEmail = email.trim().toLowerCase();
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    if (!normalizedEmail || !password) {
+      return res.status(400).json({ error: "Email y contraseña son obligatorios" });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (!user) {
       return res.status(401).json({ error: "Email o contraseña incorrectos" });
     }
@@ -95,9 +120,46 @@ const login = async (req, res) => {
     }
 
     const token = buildToken(user);
-    res.json({ user: toUserPayload(user), token });
+    res.json({ user: toSessionUserPayload(user), token });
   } catch (_error) {
     res.status(500).json({ error: "Error al iniciar sesión" });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const { email = "", newPassword = "" } = req.body ?? {};
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail || !newPassword) {
+      return res.status(400).json({ error: "Correo y nueva contraseña son obligatorios" });
+    }
+
+    if (!/\S+@\S+\.\S+/.test(normalizedEmail)) {
+      return res.status(400).json({ error: "Ingresa un correo válido" });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: "La nueva contraseña debe tener al menos 6 caracteres" });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    if (!user) {
+      return res.status(404).json({ error: "No existe una cuenta con ese correo" });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+      }
+    });
+
+    res.json({ message: "Contraseña actualizada correctamente" });
+  } catch (_error) {
+    res.status(500).json({ error: "No se pudo restablecer la contraseña" });
   }
 };
 
@@ -195,7 +257,7 @@ const updateProfile = async (req, res) => {
       data,
     });
 
-    res.json({ user: toUserPayload(updatedUser) });
+    res.json({ user: toSessionUserPayload(updatedUser) });
   } catch (_error) {
     res.status(500).json({ error: "Error al actualizar el perfil" });
   }
@@ -204,6 +266,7 @@ const updateProfile = async (req, res) => {
 module.exports = {
   register,
   login,
+  resetPassword,
   getProfile,
   updateProfile,
 };

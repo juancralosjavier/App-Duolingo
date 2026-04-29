@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -13,52 +13,38 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { getApiUrl, loginUser, warmUpApi } from "../services/api";
-import { useAuth } from "../hooks/useAuth";
+import { resetUserPassword } from "../services/api";
 import { useAppTheme } from "../hooks/useAppTheme";
 
-export default function LoginScreen() {
+export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const { signIn, user, loading: authLoading } = useAuth();
   const { theme } = useAppTheme();
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [warmingUp, setWarmingUp] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!authLoading && user) {
-      router.replace("/(tabs)");
+  const handleResetPassword = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail || !newPassword.trim() || !confirmPassword.trim()) {
+      setError("Completa todos los campos.");
+      return;
     }
-  }, [authLoading, router, user]);
 
-  useEffect(() => {
-    let mounted = true;
+    if (!/\S+@\S+\.\S+/.test(normalizedEmail)) {
+      setError("Ingresa un correo válido.");
+      return;
+    }
 
-    const bootApi = async () => {
-      try {
-        setWarmingUp(true);
-        await warmUpApi();
-      } catch (warmupError) {
-        console.log("Warmup login:", warmupError);
-      } finally {
-        if (mounted) {
-          setWarmingUp(false);
-        }
-      }
-    };
+    if (newPassword.length < 6) {
+      setError("La nueva contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
 
-    void bootApi();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      setError("Completa tu correo y contraseña.");
+    if (newPassword !== confirmPassword) {
+      setError("Las contraseñas no coinciden.");
       return;
     }
 
@@ -66,11 +52,15 @@ export default function LoginScreen() {
     setError("");
 
     try {
-      const data = await loginUser(email.trim().toLowerCase(), password);
-      await signIn(data.user, data.token);
-      router.replace("/(tabs)");
-    } catch (err: any) {
-      const message = err.message || "No se pudo iniciar sesión";
+      const response: { message?: string } = await resetUserPassword(normalizedEmail, newPassword);
+      Alert.alert("Contraseña actualizada", response.message || "Ya puedes iniciar sesión con tu nueva contraseña.", [
+        {
+          text: "Ir al login",
+          onPress: () => router.replace("/login"),
+        },
+      ]);
+    } catch (resetError: any) {
+      const message = resetError?.message || "No se pudo restablecer la contraseña";
       setError(message);
       Alert.alert("Error", message);
     } finally {
@@ -85,13 +75,26 @@ export default function LoginScreen() {
         style={styles.keyboardView}
       >
         <View style={styles.content}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={22} color={theme.text} />
+            <Text style={[styles.backText, { color: theme.text }]}>Volver</Text>
+          </TouchableOpacity>
+
           <View style={[styles.logoBadge, { backgroundColor: theme.surfaceAccent }]}>
-            <Ionicons name="calculator-outline" size={54} color={theme.text} />
+            <Ionicons name="key-outline" size={46} color={theme.text} />
           </View>
-          <Text style={[styles.title, { color: theme.primary }]}>MateCamba</Text>
+
+          <Text style={[styles.title, { color: theme.primary }]}>Restablecer contraseña</Text>
           <Text style={[styles.subtitle, { color: theme.textSoft }]}>
-            Matemáticas útiles, retos cortos y avance por fases al estilo Duolingo.
+            Ingresa tu correo y define una nueva contraseña para recuperar el acceso.
           </Text>
+
+          <View style={styles.infoCard}>
+            <Ionicons name="information-circle-outline" size={18} color={theme.secondary} />
+            <Text style={[styles.infoText, { color: theme.textSoft }]}>
+              En esta versión educativa el restablecimiento se hace directamente por correo. Más adelante podemos agregar recuperación por email con código.
+            </Text>
+          </View>
 
           <View style={styles.form}>
             <View style={[styles.inputShell, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -112,49 +115,40 @@ export default function LoginScreen() {
               <Ionicons name="lock-closed-outline" size={18} color={theme.textSoft} />
               <TextInput
                 style={[styles.input, { color: theme.text }]}
-                placeholder="Contraseña"
+                placeholder="Nueva contraseña"
                 placeholderTextColor={theme.textSoft}
-                value={password}
-                onChangeText={setPassword}
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry
+              />
+            </View>
+
+            <View style={[styles.inputShell, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Ionicons name="shield-checkmark-outline" size={18} color={theme.textSoft} />
+              <TextInput
+                style={[styles.input, { color: theme.text }]}
+                placeholder="Confirmar contraseña"
+                placeholderTextColor={theme.textSoft}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
                 secureTextEntry
               />
             </View>
 
             {error ? <Text style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
-            {warmingUp && !loading ? (
-              <Text style={[styles.helperText, { color: theme.textSoft }]}>
-                Conectando con el servidor...
-              </Text>
-            ) : null}
-            {__DEV__ ? (
-              <Text style={[styles.endpointText, { color: theme.textSoft }]} numberOfLines={2}>
-                API activa: {getApiUrl()}
-              </Text>
-            ) : null}
 
             <TouchableOpacity
               style={[styles.button, { backgroundColor: theme.primary }, loading && styles.buttonDisabled]}
-              onPress={handleLogin}
+              onPress={handleResetPassword}
               disabled={loading}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.buttonText}>Entrar a mi ruta</Text>
+                <Text style={styles.buttonText}>Guardar nueva contraseña</Text>
               )}
             </TouchableOpacity>
           </View>
-
-          <View style={styles.footer}>
-            <Text style={[styles.footerText, { color: theme.textSoft }]}>¿No tienes cuenta?</Text>
-            <TouchableOpacity onPress={() => router.push("/register" as any)}>
-              <Text style={[styles.link, { color: theme.primary }]}>Crear cuenta</Text>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity style={styles.recoveryLinkWrap} onPress={() => router.push("/forgot-password" as any)}>
-            <Text style={[styles.recoveryLink, { color: theme.secondary }]}>Olvidé mi contraseña</Text>
-          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -171,34 +165,55 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     justifyContent: "center",
-    alignItems: "center",
     padding: 24,
   },
+  backButton: {
+    position: "absolute",
+    top: 18,
+    left: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  backText: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
   logoBadge: {
-    width: 112,
-    height: 112,
-    borderRadius: 36,
-    backgroundColor: "#e8f7d8",
+    width: 92,
+    height: 92,
+    borderRadius: 28,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
+    alignSelf: "center",
+    marginBottom: 18,
   },
   title: {
-    fontSize: 34,
-    fontWeight: "bold",
-    color: "#58cc02",
+    fontSize: 30,
+    fontWeight: "800",
+    textAlign: "center",
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    marginBottom: 36,
     textAlign: "center",
-    maxWidth: 320,
-    lineHeight: 22,
+    lineHeight: 23,
+    marginBottom: 22,
+  },
+  infoCard: {
+    flexDirection: "row",
+    gap: 10,
+    borderRadius: 16,
+    padding: 14,
+    backgroundColor: "rgba(88,204,2,0.09)",
+    marginBottom: 18,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
   },
   form: {
-    width: "100%",
-    maxWidth: 340,
     gap: 12,
   },
   inputShell: {
@@ -215,28 +230,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   error: {
-    color: "#ff4b4b",
     fontSize: 14,
     textAlign: "center",
   },
-  helperText: {
-    fontSize: 13,
-    textAlign: "center",
-  },
-  endpointText: {
-    fontSize: 11,
-    textAlign: "center",
-    lineHeight: 16,
-  },
   button: {
-    backgroundColor: "#58cc02",
     padding: 16,
     borderRadius: 16,
-    marginTop: 6,
-    shadowColor: "#58cc02",
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
+    marginTop: 4,
   },
   buttonDisabled: {
     opacity: 0.6,
@@ -246,24 +246,5 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
     textAlign: "center",
-  },
-  footer: {
-    flexDirection: "row",
-    marginTop: 34,
-  },
-  footerText: {
-    fontSize: 14,
-  },
-  link: {
-    fontSize: 14,
-    fontWeight: "bold",
-    marginLeft: 8,
-  },
-  recoveryLinkWrap: {
-    marginTop: 14,
-  },
-  recoveryLink: {
-    fontSize: 14,
-    fontWeight: "700",
   },
 });

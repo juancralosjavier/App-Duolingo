@@ -11,7 +11,8 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "seed": "prisma db seed"
+    "seed": "prisma db seed",
+    "seed:extra-math": "node prisma/seedExtraMath.js"
   },
   "keywords": [],
   "author": "",

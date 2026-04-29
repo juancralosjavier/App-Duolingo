@@ -1,11 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -66,6 +69,7 @@ type LessonPhase = "main" | "review_intro" | "review";
 const SUCCESS_TITLES = ["¡Así se hace!", "¡Buen trabajo!", "¡Muy bien!"];
 const ERROR_TITLES = ["Eso estuvo difícil", "Vamos otra vez", "Casi lo logras"];
 const KEYPAD_VALUES = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
+const HEART_SLOTS = 5;
 
 function normalizeInput(value: string) {
   return value.trim().toLowerCase().replace(",", ".").replace(/\s+/g, "");
@@ -101,11 +105,12 @@ function pickFeedbackTitle(correct: boolean, phase: LessonPhase, seed: number) {
 }
 
 export default function LessonScreen() {
-  const { lessonId } = useLocalSearchParams();
+  const { lessonId, returnTo } = useLocalSearchParams();
   const router = useRouter();
   const { theme } = useAppTheme();
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { playCorrect, playWrong } = useLessonFeedback();
+  const { width, height } = useWindowDimensions();
 
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);
@@ -128,6 +133,32 @@ export default function LessonScreen() {
   const [feedbackCorrectAnswer, setFeedbackCorrectAnswer] = useState("");
   const [comboCount, setComboCount] = useState(0);
   const [bestCombo, setBestCombo] = useState(0);
+  const progressAnimation = React.useRef(new Animated.Value(0)).current;
+  const feedbackAnimation = React.useRef(new Animated.Value(0)).current;
+  const heartsScale = React.useRef(new Animated.Value(1)).current;
+  const heartsShake = React.useRef(new Animated.Value(0)).current;
+  const questionAnimation = React.useRef(new Animated.Value(1)).current;
+  const previousHeartsRef = React.useRef(user?.hearts ?? 5);
+  const compactLayout = width < 430 || height < 860;
+
+  const metrics = useMemo(
+    () => ({
+      promptTitleSize: compactLayout ? 22 : 28,
+      optionTextSize: compactLayout ? 17 : 21,
+      optionPaddingVertical: compactLayout ? 15 : 19,
+      equationTextSize: compactLayout ? 32 : 42,
+      targetTextSize: compactLayout ? 38 : 50,
+      patternRowHeight: compactLayout ? 84 : 108,
+      patternCellTextSize: compactLayout ? 17 : 21,
+      blankSize: compactLayout ? 54 : 64,
+      answerBoxHeight: compactLayout ? 58 : 68,
+      answerBoxMinWidth: compactLayout ? 72 : 88,
+      answerTextSize: compactLayout ? 20 : 24,
+      builderTileSize: compactLayout ? 54 : 68,
+      horizontalPadding: compactLayout ? 12 : 18,
+    }),
+    [compactLayout]
+  );
 
   const loadLesson = useCallback(async () => {
     setLoading(true);
@@ -209,6 +240,72 @@ export default function LessonScreen() {
       : currentQuestionIndex;
   const progress = totalSteps > 0 ? Math.max(8, ((answeredSteps + 1) / totalSteps) * 100) : 0;
   const phaseProgressColor = phase === "review" || phase === "review_intro" ? theme.warning : theme.primary;
+  const progressWidth = progressAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0%", "100%"],
+  });
+  const feedbackTranslateY = feedbackAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [18, 0],
+  });
+  const feedbackOpacity = feedbackAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+
+  useEffect(() => {
+    Animated.timing(progressAnimation, {
+      toValue: Math.max(0, Math.min(1, progress / 100)),
+      duration: 320,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [progress, progressAnimation]);
+
+  useEffect(() => {
+    Animated.timing(feedbackAnimation, {
+      toValue: submitted ? 1 : 0,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [feedbackAnimation, submitted]);
+
+  useEffect(() => {
+    questionAnimation.setValue(0);
+    Animated.timing(questionAnimation, {
+      toValue: 1,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [currentQuestionIndex, phase, questionAnimation]);
+
+  useEffect(() => {
+    const previousHearts = previousHeartsRef.current;
+
+    if (heartsRemaining < previousHearts) {
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(heartsScale, { toValue: 1.14, duration: 120, useNativeDriver: true }),
+          Animated.timing(heartsScale, { toValue: 1, duration: 170, useNativeDriver: true }),
+        ]),
+        Animated.sequence([
+          Animated.timing(heartsShake, { toValue: -6, duration: 45, useNativeDriver: true }),
+          Animated.timing(heartsShake, { toValue: 6, duration: 70, useNativeDriver: true }),
+          Animated.timing(heartsShake, { toValue: -4, duration: 55, useNativeDriver: true }),
+          Animated.timing(heartsShake, { toValue: 0, duration: 45, useNativeDriver: true }),
+        ]),
+      ]).start();
+    } else if (heartsRemaining > previousHearts) {
+      Animated.sequence([
+        Animated.timing(heartsScale, { toValue: 1.12, duration: 130, useNativeDriver: true }),
+        Animated.timing(heartsScale, { toValue: 1, duration: 180, useNativeDriver: true }),
+      ]).start();
+    }
+
+    previousHeartsRef.current = heartsRemaining;
+  }, [heartsRemaining, heartsScale, heartsShake]);
 
   const resetAnswerState = useCallback(() => {
     setSelectedOption(null);
@@ -240,10 +337,11 @@ export default function LessonScreen() {
           mistakes: String(mistakeIds.length),
           reviewed: String(reviewQueue.length),
           combo: String(bestCombo),
+          returnTo: typeof returnTo === "string" ? returnTo : `/course/${lesson.unit.course.id}`,
         },
       });
     },
-    [bestCombo, lesson, mistakeIds.length, reviewQueue.length, router]
+    [bestCombo, lesson, mistakeIds.length, returnTo, reviewQueue.length, router]
   );
 
   const startReviewPhase = useCallback(() => {
@@ -365,6 +463,9 @@ export default function LessonScreen() {
       if (phase === "main" && !mistakeIds.includes(question.id)) {
         setMistakeIds((current) => [...current, question.id]);
       }
+      if (nextHearts !== heartsRemaining) {
+        void updateUser({ hearts: nextHearts });
+      }
       await playWrong();
     }
 
@@ -380,10 +481,14 @@ export default function LessonScreen() {
         ? currentQuestionIndex >= lessonQuestionCount - 1
         : currentQuestionIndex >= reviewQueue.length - 1;
 
-    if (phase === "review" && isLastVisibleQuestion) {
+    if (!correct && nextHearts <= 0) {
+      setFeedbackAction("Ver resultado");
+    } else if (phase === "review" && isLastVisibleQuestion) {
       setFeedbackAction("Cerrar repaso");
     } else if (phase === "main" && isLastVisibleQuestion && !correct) {
       setFeedbackAction("Ir al repaso");
+    } else if (!correct) {
+      setFeedbackAction("Entendido");
     } else {
       setFeedbackAction("Continuar");
     }
@@ -391,7 +496,22 @@ export default function LessonScreen() {
 
   const handleClose = () => {
     if (!lesson) return;
-    router.replace(`/course/${lesson.unit.course.id}` as any);
+    const destination =
+      typeof returnTo === "string" && returnTo.length > 0 ? returnTo : `/course/${lesson.unit.course.id}`;
+    const dismissTo = (router as any).dismissTo;
+    const navigate = (router as any).navigate;
+
+    if (typeof dismissTo === "function") {
+      dismissTo(destination);
+      return;
+    }
+
+    if (typeof navigate === "function") {
+      navigate(destination);
+      return;
+    }
+
+    router.replace(destination as any);
   };
 
   const handleBuilderTokenPress = (index: number) => {
@@ -462,6 +582,7 @@ export default function LessonScreen() {
           key={option.id}
           style={[
             styles.optionButton,
+            { paddingVertical: metrics.optionPaddingVertical },
             { backgroundColor: theme.surfaceMuted, borderColor: theme.border },
             selectedOption === option.id && [
               styles.optionSelected,
@@ -494,7 +615,7 @@ export default function LessonScreen() {
           <Text
             style={[
               styles.optionText,
-              { color: theme.text },
+              { color: theme.text, fontSize: metrics.optionTextSize },
               selectedOption === option.id && { color: accentColor },
               submitted && option.isCorrect && { color: theme.primary },
               submitted && selectedOption === option.id && !option.isCorrect && { color: theme.danger },
@@ -511,7 +632,10 @@ export default function LessonScreen() {
     <View style={styles.promptSection}>
       <View style={[styles.patternGrid, { borderColor: theme.border }]}>
         {(promptData.rows || []).map((row, rowIndex) => (
-          <View key={`pattern-row-${rowIndex}`} style={[styles.patternRow, { borderBottomColor: theme.border }]}>
+          <View
+            key={`pattern-row-${rowIndex}`}
+            style={[styles.patternRow, { borderBottomColor: theme.border, minHeight: metrics.patternRowHeight }]}
+          >
             {row.map((cell, columnIndex) => {
               const isMissing = rowIndex === promptData.missingRow && columnIndex === promptData.missingCol;
               return (
@@ -530,7 +654,12 @@ export default function LessonScreen() {
                     columnIndex === row.length - 1 && styles.patternCellLast,
                   ]}
                 >
-                  <Text style={[styles.patternCellText, { color: isMissing ? theme.secondary : theme.text }]}>
+                  <Text
+                    style={[
+                      styles.patternCellText,
+                      { color: isMissing ? theme.secondary : theme.text, fontSize: metrics.patternCellTextSize },
+                    ]}
+                  >
                     {cell}
                   </Text>
                 </View>
@@ -549,9 +678,27 @@ export default function LessonScreen() {
         {(promptData.equationTokens || []).map((token, index) => (
           <React.Fragment key={`equation-token-${index}`}>
             {token === "?" ? (
-              <View style={[styles.blankToken, { borderColor: theme.secondary, backgroundColor: theme.surfaceMuted }]} />
+              <View
+                style={[
+                  styles.blankToken,
+                  {
+                    width: metrics.blankSize,
+                    height: metrics.blankSize,
+                    borderColor: theme.secondary,
+                    backgroundColor: theme.surfaceMuted,
+                  },
+                ]}
+              />
             ) : (
-              <Text style={[styles.equationTokenText, { color: token === "×" || token === "=" ? theme.secondary : theme.text }]}>
+              <Text
+                style={[
+                  styles.equationTokenText,
+                  {
+                    color: token === "×" || token === "=" ? theme.secondary : theme.text,
+                    fontSize: metrics.equationTextSize,
+                  },
+                ]}
+              >
                 {token}
               </Text>
             )}
@@ -573,17 +720,27 @@ export default function LessonScreen() {
                   style={[
                     styles.answerDisplayBox,
                     {
+                      minWidth: metrics.answerBoxMinWidth,
+                      height: metrics.answerBoxHeight,
                       borderColor: theme.secondary,
                       backgroundColor: theme.surfaceMuted,
                     },
                   ]}
                 >
-                  <Text style={[styles.answerDisplayText, { color: theme.text }]}>
+                  <Text style={[styles.answerDisplayText, { color: theme.text, fontSize: metrics.answerTextSize }]}>
                     {answerInput || ""}
                   </Text>
                 </View>
               ) : (
-                <Text style={[styles.equationTokenText, { color: token === "×" || token === "=" || token === "+" || token === "-" ? theme.secondary : theme.text }]}>
+                <Text
+                  style={[
+                    styles.equationTokenText,
+                    {
+                      color: token === "×" || token === "=" || token === "+" || token === "-" ? theme.secondary : theme.text,
+                      fontSize: metrics.equationTextSize,
+                    },
+                  ]}
+                >
                   {token}
                 </Text>
               )}
@@ -604,7 +761,7 @@ export default function LessonScreen() {
                 },
               ]}
             >
-              <Text style={[styles.keypadInputValue, { color: theme.text }]}>
+              <Text style={[styles.keypadInputValue, { color: theme.text, fontSize: metrics.answerTextSize + 2 }]}>
                 {answerInput || promptData.placeholder || "0"}
               </Text>
             </View>
@@ -617,7 +774,7 @@ export default function LessonScreen() {
                 style={[styles.keypadButton, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}
                 onPress={() => handleKeypadPress(value)}
               >
-                <Text style={[styles.keypadButtonText, { color: theme.text }]}>{value}</Text>
+                <Text style={[styles.keypadButtonText, { color: theme.text, fontSize: compactLayout ? 24 : 28 }]}>{value}</Text>
               </TouchableOpacity>
             ))}
             <View style={styles.keypadSpacer} />
@@ -637,6 +794,7 @@ export default function LessonScreen() {
               backgroundColor: theme.surfaceMuted,
               color: theme.text,
               borderColor: theme.border,
+              fontSize: metrics.answerTextSize,
             },
           ]}
           placeholder={promptData.placeholder || "Escribe tu resultado"}
@@ -688,7 +846,7 @@ export default function LessonScreen() {
                     {selectedIndex >= 0 ? selectedIndex + 1 : "+"}
                   </Text>
                 </View>
-                <Text style={[styles.optionText, { color: theme.text }]}>{option.text}</Text>
+                <Text style={[styles.optionText, { color: theme.text, fontSize: metrics.optionTextSize }]}>{option.text}</Text>
               </View>
             </TouchableOpacity>
           );
@@ -700,8 +858,8 @@ export default function LessonScreen() {
   const renderEquationBuilderPrompt = () => (
     <View style={styles.promptSection}>
       <View style={styles.equationBuilderLine}>
-        <Text style={[styles.equationTargetText, { color: theme.text }]}>{promptData.target}</Text>
-        <Text style={[styles.equationTargetText, { color: theme.secondary }]}>=</Text>
+        <Text style={[styles.equationTargetText, { color: theme.text, fontSize: metrics.targetTextSize }]}>{promptData.target}</Text>
+        <Text style={[styles.equationTargetText, { color: theme.secondary, fontSize: metrics.targetTextSize }]}>=</Text>
         <View style={styles.builderSlotsRow}>
           {builderSolution.map((_, slotIndex) => (
             <View
@@ -709,12 +867,14 @@ export default function LessonScreen() {
               style={[
                 styles.builderSlot,
                 {
+                  minWidth: metrics.builderTileSize,
+                  height: metrics.builderTileSize,
                   borderColor: theme.secondary,
                   backgroundColor: theme.surfaceMuted,
                 },
               ]}
             >
-              <Text style={[styles.builderSlotText, { color: theme.text }]}>
+              <Text style={[styles.builderSlotText, { color: theme.text, fontSize: compactLayout ? 20 : 24 }]}>
                 {builderSelectedTokens[slotIndex] || ""}
               </Text>
             </View>
@@ -732,6 +892,8 @@ export default function LessonScreen() {
               style={[
                 styles.builderToken,
                 {
+                  minWidth: metrics.builderTileSize,
+                  height: metrics.builderTileSize,
                   borderColor: isUsed ? theme.border : theme.primary,
                   backgroundColor: isUsed ? theme.border : theme.surface,
                 },
@@ -739,12 +901,24 @@ export default function LessonScreen() {
               onPress={() => handleBuilderTokenPress(index)}
               disabled={isUsed || submitted}
             >
-              <Text style={[styles.builderTokenText, { color: isUsed ? theme.textSoft : theme.primary }]}>{token}</Text>
+              <Text
+                style={[styles.builderTokenText, { color: isUsed ? theme.textSoft : theme.primary, fontSize: compactLayout ? 20 : 24 }]}
+              >
+                {token}
+              </Text>
             </TouchableOpacity>
           );
         })}
         <TouchableOpacity
-          style={[styles.builderBackspace, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}
+          style={[
+            styles.builderBackspace,
+            {
+              minWidth: metrics.builderTileSize,
+              height: metrics.builderTileSize,
+              backgroundColor: theme.surfaceMuted,
+              borderColor: theme.border,
+            },
+          ]}
           onPress={handleBuilderBackspace}
           disabled={submitted || builderSelection.length === 0}
         >
@@ -798,19 +972,45 @@ export default function LessonScreen() {
 
   if (phase === "review_intro") {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={["bottom"]}>
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.background, paddingHorizontal: metrics.horizontalPadding }]}
+        edges={["bottom"]}
+      >
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.topBar}>
           <TouchableOpacity style={[styles.closeButton, { backgroundColor: theme.surfaceMuted }]} onPress={handleClose}>
             <Ionicons name="close" size={22} color={theme.textSoft} />
           </TouchableOpacity>
-          <View style={[styles.progressTrack, { backgroundColor: theme.surfaceMuted }]}>
-            <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: theme.warning }]} />
-          </View>
-          <View style={[styles.heartsPill, { backgroundColor: theme.surfaceMuted }]}>
+        <View style={[styles.progressTrack, { backgroundColor: theme.surfaceMuted }]}>
+          <Animated.View style={[styles.progressFill, { width: progressWidth, backgroundColor: theme.warning }]} />
+        </View>
+          <Animated.View
+            style={[
+              styles.heartsPill,
+              {
+                backgroundColor: theme.surfaceMuted,
+                transform: [{ translateX: heartsShake }, { scale: heartsScale }],
+              },
+            ]}
+          >
             <Ionicons name="heart" size={14} color={theme.danger} />
             <Text style={[styles.heartsText, { color: theme.text }]}>{heartsRemaining}</Text>
-          </View>
+            <View style={styles.heartsMiniRow}>
+              {Array.from({ length: HEART_SLOTS }).map((_, index) => {
+                const active = index < heartsRemaining;
+
+                return (
+                  <Ionicons
+                    key={`intro-heart-${index}`}
+                    name={active ? "heart" : "heart-outline"}
+                    size={11}
+                    color={active ? theme.danger : theme.textSoft}
+                    style={{ opacity: active ? 1 : 0.45 }}
+                  />
+                );
+              })}
+            </View>
+          </Animated.View>
         </View>
 
         <View style={styles.reviewIntroContent}>
@@ -843,7 +1043,10 @@ export default function LessonScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={["bottom"]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.background, paddingHorizontal: metrics.horizontalPadding }]}
+      edges={["bottom"]}
+    >
       <Stack.Screen options={{ headerShown: false }} />
 
       <View style={styles.topBar}>
@@ -852,13 +1055,36 @@ export default function LessonScreen() {
         </TouchableOpacity>
 
         <View style={[styles.progressTrack, { backgroundColor: theme.surfaceMuted }]}>
-          <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: phaseProgressColor }]} />
+          <Animated.View style={[styles.progressFill, { width: progressWidth, backgroundColor: phaseProgressColor }]} />
         </View>
 
-        <View style={[styles.heartsPill, { backgroundColor: theme.surfaceMuted }]}>
+        <Animated.View
+          style={[
+            styles.heartsPill,
+            {
+              backgroundColor: theme.surfaceMuted,
+              transform: [{ translateX: heartsShake }, { scale: heartsScale }],
+            },
+          ]}
+        >
           <Ionicons name="heart" size={14} color={theme.danger} />
           <Text style={[styles.heartsText, { color: theme.text }]}>{heartsRemaining}</Text>
-        </View>
+          <View style={styles.heartsMiniRow}>
+            {Array.from({ length: HEART_SLOTS }).map((_, index) => {
+              const active = index < heartsRemaining;
+
+              return (
+                <Ionicons
+                  key={`play-heart-${index}`}
+                  name={active ? "heart" : "heart-outline"}
+                  size={11}
+                  color={active ? theme.danger : theme.textSoft}
+                  style={{ opacity: active ? 1 : 0.45 }}
+                />
+              );
+            })}
+          </View>
+        </Animated.View>
       </View>
 
       <View style={styles.headerMeta}>
@@ -879,8 +1105,35 @@ export default function LessonScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.promptTitle, { color: theme.text }]}>{question.text}</Text>
-        {renderQuestionContent()}
+        <Animated.View
+          style={{
+            opacity: questionAnimation,
+            transform: [
+              {
+                translateY: questionAnimation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [20, 0],
+                }),
+              },
+              {
+                scale: questionAnimation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.98, 1],
+                }),
+              },
+            ],
+          }}
+        >
+          <Text
+            style={[
+              styles.promptTitle,
+              { color: theme.text, fontSize: metrics.promptTitleSize, lineHeight: metrics.promptTitleSize + 6 },
+            ]}
+          >
+            {question.text}
+          </Text>
+          {renderQuestionContent()}
+        </Animated.View>
       </ScrollView>
 
       <View style={[styles.footer, { borderTopColor: theme.border, backgroundColor: theme.background }]}>
@@ -889,7 +1142,7 @@ export default function LessonScreen() {
         ) : null}
 
         {submitted ? (
-          <View
+          <Animated.View
             style={[
               styles.feedbackCard,
               {
@@ -901,6 +1154,8 @@ export default function LessonScreen() {
                   ? "#351d22"
                   : "#fff0f1",
                 borderColor: isCorrect ? theme.primary : theme.danger,
+                opacity: feedbackOpacity,
+                transform: [{ translateY: feedbackTranslateY }],
               },
             ]}
           >
@@ -927,7 +1182,7 @@ export default function LessonScreen() {
                 Respuesta correcta: {feedbackCorrectAnswer}
               </Text>
             ) : null}
-          </View>
+          </Animated.View>
         ) : null}
 
         <TouchableOpacity
@@ -954,7 +1209,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 18,
-    paddingTop: 14,
+    paddingTop: 12,
   },
   loadingContainer: {
     flex: 1,
@@ -999,17 +1254,22 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   heartsPill: {
-    minWidth: 56,
+    minWidth: 72,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
     borderRadius: 18,
     paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingVertical: 9,
   },
   heartsText: {
     fontWeight: "800",
+  },
+  heartsMiniRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
   },
   headerMeta: {
     marginTop: 14,
@@ -1045,10 +1305,10 @@ const styles = StyleSheet.create({
     fontSize: 28,
     lineHeight: 34,
     fontWeight: "800",
-    marginBottom: 24,
+    marginBottom: 18,
   },
   promptSection: {
-    gap: 22,
+    gap: 18,
   },
   patternGrid: {
     borderRadius: 26,
@@ -1057,7 +1317,7 @@ const styles = StyleSheet.create({
   },
   patternRow: {
     flexDirection: "row",
-    minHeight: 120,
+    minHeight: 108,
     borderBottomWidth: 1,
   },
   patternCell: {
@@ -1071,7 +1331,7 @@ const styles = StyleSheet.create({
     borderRightWidth: 0,
   },
   patternCellText: {
-    fontSize: 22,
+    fontSize: 21,
     fontWeight: "800",
     textAlign: "center",
   },
@@ -1084,12 +1344,12 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   equationTokenText: {
-    fontSize: 46,
+    fontSize: 42,
     fontWeight: "800",
   },
   blankToken: {
-    width: 68,
-    height: 68,
+    width: 64,
+    height: 64,
     borderRadius: 18,
     borderWidth: 3,
   },
@@ -1100,7 +1360,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderRadius: 22,
     paddingHorizontal: 20,
-    paddingVertical: 22,
+    paddingVertical: 19,
   },
   optionSelected: {
     transform: [{ scale: 1.01 }],
@@ -1108,7 +1368,7 @@ const styles = StyleSheet.create({
   optionCorrect: {},
   optionWrong: {},
   optionText: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "800",
     textAlign: "center",
   },
@@ -1116,14 +1376,14 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderRadius: 20,
     paddingHorizontal: 18,
-    paddingVertical: 18,
-    fontSize: 22,
+    paddingVertical: 16,
+    fontSize: 20,
     fontWeight: "700",
     textAlign: "center",
   },
   answerDisplayBox: {
-    minWidth: 92,
-    height: 72,
+    minWidth: 88,
+    height: 68,
     borderRadius: 20,
     borderWidth: 3,
     alignItems: "center",
@@ -1131,7 +1391,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   answerDisplayText: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: "800",
   },
   keypadSection: {
@@ -1145,7 +1405,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   keypadInputValue: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "800",
   },
   keypadGrid: {
@@ -1163,7 +1423,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   keypadButtonText: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "800",
   },
   keypadSpacer: {
@@ -1207,7 +1467,7 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   equationTargetText: {
-    fontSize: 54,
+    fontSize: 50,
     fontWeight: "800",
   },
   builderSlotsRow: {
@@ -1215,8 +1475,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   builderSlot: {
-    minWidth: 72,
-    height: 72,
+    minWidth: 68,
+    height: 68,
     borderRadius: 20,
     borderWidth: 3,
     alignItems: "center",
@@ -1224,7 +1484,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   builderSlotText: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "800",
   },
   builderBank: {
@@ -1234,8 +1494,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   builderToken: {
-    minWidth: 72,
-    height: 72,
+    minWidth: 68,
+    height: 68,
     paddingHorizontal: 16,
     borderRadius: 20,
     borderWidth: 3,
@@ -1243,20 +1503,20 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   builderTokenText: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "800",
   },
   builderBackspace: {
-    minWidth: 72,
-    height: 72,
+    minWidth: 68,
+    height: 68,
     borderRadius: 20,
     borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",
   },
   footer: {
-    paddingTop: 16,
-    paddingBottom: 18,
+    paddingTop: 14,
+    paddingBottom: 16,
     gap: 12,
     borderTopWidth: 1,
   },
@@ -1288,7 +1548,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   footerButton: {
-    paddingVertical: 18,
+    paddingVertical: 16,
     borderRadius: 20,
   },
   footerButtonText: {

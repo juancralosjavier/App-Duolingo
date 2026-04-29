@@ -33,7 +33,15 @@ interface Course {
   id: number;
   title: string;
   icon: string;
-  units: { lessons: { id: number }[] }[];
+  units: {
+    lessons: {
+      id: number;
+      title?: string;
+      challengeType?: string;
+      difficulty?: number;
+      icon?: string;
+    }[];
+  }[];
 }
 
 const challengeLibrary = [
@@ -132,7 +140,21 @@ export default function ChallengeScreen() {
     totalStars: 0,
     totalAttempts: 0,
   };
-  const records = progressData?.records || [];
+  const records = useMemo(() => progressData?.records || [], [progressData]);
+
+  const lessonPool = useMemo(
+    () =>
+      courses.flatMap((course) =>
+        course.units.flatMap((unit) =>
+          unit.lessons.map((lesson) => ({
+            ...lesson,
+            courseId: course.id,
+            completed: !!records.find((record) => record.lessonId === lesson.id)?.completed,
+          }))
+        )
+      ),
+    [courses, records]
+  );
 
   const monthlyTarget = 15;
   const monthlyProgress = Math.min(monthlyTarget, summary.totalStars + Math.max(0, summary.completedLessons - 1));
@@ -143,6 +165,26 @@ export default function ChallengeScreen() {
     () => courses.reduce((sum, course) => sum + course.units.reduce((acc, unit) => acc + unit.lessons.length, 0), 0),
     [courses]
   );
+
+  const openChallenge = (challengeType?: string) => {
+    const lesson =
+      lessonPool.find((item) => item.challengeType === challengeType && !item.completed) ||
+      lessonPool.find((item) => item.challengeType === challengeType) ||
+      lessonPool.find((item) => !item.completed) ||
+      lessonPool[0];
+
+    if (!lesson) {
+      router.push("/(tabs)/practice");
+      return;
+    }
+
+    router.push({
+      pathname: `/lesson/${lesson.id}` as any,
+      params: {
+        returnTo: "/(tabs)/vocab",
+      },
+    });
+  };
 
   if (loading) {
     return (
@@ -172,7 +214,11 @@ export default function ChallengeScreen() {
             <Text style={styles.heroTitle}>Desafío del mes</Text>
             <Text style={styles.heroTimer}>Queda 1 día</Text>
           </View>
-          <View style={[styles.heroProgressCard, { backgroundColor: "#102630" }]}>
+          <TouchableOpacity
+            style={[styles.heroProgressCard, { backgroundColor: "#102630" }]}
+            onPress={() => openChallenge()}
+            activeOpacity={0.9}
+          >
             <Text style={styles.heroProgressTitle}>Gana 15 puntos de desafío</Text>
             <View style={[styles.track, { backgroundColor: "#314855" }]}>
               <View style={[styles.trackFill, { width: `${(monthlyProgress / monthlyTarget) * 100}%`, backgroundColor: "#3cb8ff" }]} />
@@ -183,7 +229,7 @@ export default function ChallengeScreen() {
                 </Text>
               </View>
             </View>
-          </View>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
@@ -208,30 +254,36 @@ export default function ChallengeScreen() {
           </View>
 
           <View style={[styles.dailyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <ProgressTask
-              title="Empieza una racha"
-              progress={streakGoal}
-              target={1}
-              icon="flame"
-              color="#3cb8ff"
-              theme={theme}
-            />
-            <ProgressTask
-              title="Obtén un puntaje de 80 % en 2 lecciones"
-              progress={highAccuracyCount}
-              target={2}
-              icon="speedometer"
-              color="#4da8ff"
-              theme={theme}
-            />
-            <ProgressTask
-              title="Aprende durante 5 minutos"
-              progress={practiceMinutes}
-              target={5}
-              icon="time-outline"
-              color="#ffd33d"
-              theme={theme}
-            />
+            <TouchableOpacity activeOpacity={0.9} onPress={() => openChallenge()}>
+              <ProgressTask
+                title="Empieza una racha"
+                progress={streakGoal}
+                target={1}
+                icon="flame"
+                color="#3cb8ff"
+                theme={theme}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity activeOpacity={0.9} onPress={() => openChallenge("numeric_input")}>
+              <ProgressTask
+                title="Obtén un puntaje de 80 % en 2 lecciones"
+                progress={highAccuracyCount}
+                target={2}
+                icon="speedometer"
+                color="#4da8ff"
+                theme={theme}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity activeOpacity={0.9} onPress={() => openChallenge("numeric_keypad")}>
+              <ProgressTask
+                title="Aprende durante 5 minutos"
+                progress={practiceMinutes}
+                target={5}
+                icon="time-outline"
+                color="#ffd33d"
+                theme={theme}
+              />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -262,9 +314,19 @@ export default function ChallengeScreen() {
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Biblioteca interactiva</Text>
           {challengeLibrary.map((item) => (
-            <View
+            <TouchableOpacity
               key={item.title}
               style={[styles.libraryCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+              activeOpacity={0.9}
+              onPress={() =>
+                openChallenge(
+                  item.title === "Patrones"
+                    ? "pattern_grid_choice"
+                    : item.title === "Cálculo mental"
+                    ? "numeric_keypad"
+                    : "equation_builder"
+                )
+              }
             >
               <View style={[styles.libraryIcon, { backgroundColor: theme.surfaceMuted }]}>
                 <Ionicons name={item.icon} size={22} color={theme.secondary} />
@@ -273,7 +335,7 @@ export default function ChallengeScreen() {
                 <Text style={[styles.libraryTitle, { color: theme.text }]}>{item.title}</Text>
                 <Text style={[styles.libraryText, { color: theme.textSoft }]}>{item.detail}</Text>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
       </ScrollView>

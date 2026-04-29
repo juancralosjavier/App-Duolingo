@@ -25,7 +25,7 @@ function Stars({ count }: { count: number }) {
 }
 
 export default function ResultScreen() {
-  const { lessonId, courseId, correct, total, difficulty, heartsRemaining, title, mistakes, reviewed, combo } =
+  const { lessonId, courseId, correct, total, difficulty, heartsRemaining, title, mistakes, reviewed, combo, returnTo } =
     useLocalSearchParams();
   const router = useRouter();
   const { updateUser } = useAuth();
@@ -54,6 +54,24 @@ export default function ResultScreen() {
     }
   }, [passed, playCorrect, playWrong]);
 
+  const closeToOrigin = React.useCallback(() => {
+    const destination = typeof returnTo === "string" && returnTo.length > 0 ? returnTo : courseId ? `/course/${courseId}` : "/(tabs)";
+    const dismissTo = (router as any).dismissTo;
+    const navigate = (router as any).navigate;
+
+    if (typeof dismissTo === "function") {
+      dismissTo(destination);
+      return;
+    }
+
+    if (typeof navigate === "function") {
+      navigate(destination);
+      return;
+    }
+
+    router.replace(destination as any);
+  }, [courseId, returnTo, router]);
+
   const handleContinue = async () => {
     setSaving(true);
 
@@ -64,6 +82,7 @@ export default function ResultScreen() {
         score: xpGained,
         accuracy,
         stars,
+        heartsRemaining: heartsNum,
       });
 
       if (response?.user) {
@@ -74,9 +93,12 @@ export default function ResultScreen() {
     } finally {
       setSaving(false);
       if (passed) {
-        router.replace(courseId ? (`/course/${courseId}` as any) : "/(tabs)");
+        closeToOrigin();
       } else {
-        router.replace(lessonId ? (`/lesson/${lessonId}` as any) : "/(tabs)");
+        router.replace({
+          pathname: lessonId ? (`/lesson/${lessonId}` as any) : "/(tabs)",
+          params: typeof returnTo === "string" && returnTo.length > 0 ? { returnTo } : undefined,
+        });
       }
     }
   };

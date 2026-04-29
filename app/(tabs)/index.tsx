@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Animated, Easing, View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { getCourses, getUserProgress } from "../../services/api";
@@ -39,6 +39,9 @@ export default function HomeScreen() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const entrance = useRef(new Animated.Value(0)).current;
+  const pulse = useRef(new Animated.Value(1)).current;
+  const progressBar = useRef(new Animated.Value(0)).current;
 
   const loadCourses = useCallback(async () => {
     setLoading(true);
@@ -65,10 +68,35 @@ export default function HomeScreen() {
     void loadCourses();
   }, [loadCourses]);
 
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    Animated.timing(entrance, {
+      toValue: 1,
+      duration: 520,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.03, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true }),
+      ])
+    );
+
+    pulseLoop.start();
+    return () => pulseLoop.stop();
+  }, [entrance, loading, pulse]);
+
   const firstName = user?.name?.split(" ")[0] || "estudiante";
   const level = getLevelFromXp(user?.xp || 0);
   const phase = getPhaseLabel(level);
   const featuredCourse = courses[0];
+  const dailyGoal = user?.dailyGoal || 3;
+  const dailyProgressValue = Math.max(0, Math.min(1, progressSummary.completedLessons / dailyGoal));
   const totalLessons = useMemo(
     () =>
       courses.reduce(
@@ -78,6 +106,19 @@ export default function HomeScreen() {
       ),
     [courses]
   );
+  const animatedGoalWidth = progressBar.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0%", "100%"],
+  });
+
+  useEffect(() => {
+    Animated.timing(progressBar, {
+      toValue: dailyProgressValue,
+      duration: 700,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [dailyProgressValue, progressBar]);
 
   if (loading) {
     return (
@@ -101,18 +142,69 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.background }]} showsVerticalScrollIndicator={false}>
-      <Text style={[styles.title, { color: theme.text }]}>Hola, {firstName}</Text>
-      <Text style={[styles.subtitle, { color: theme.textSoft }]}>
+      <Animated.Text
+        style={[
+          styles.title,
+          {
+            color: theme.text,
+            opacity: entrance,
+            transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }],
+          },
+        ]}
+      >
+        Hola, {firstName}
+      </Animated.Text>
+      <Animated.Text
+        style={[
+          styles.subtitle,
+          {
+            color: theme.textSoft,
+            opacity: entrance,
+            transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
+          },
+        ]}
+      >
         Estás en {phase}. Hoy toca resolver mates con ritmo, precisión y contexto local.
-      </Text>
+      </Animated.Text>
 
-      <View style={[styles.heroCard, { backgroundColor: theme.mode === "dark" ? "#11232c" : "#103d2f" }]}>
+      <Animated.View
+        style={{
+          opacity: entrance,
+          transform: [
+            { translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [26, 0] }) },
+            { scale: pulse },
+          ],
+        }}
+      >
+      <TouchableOpacity
+        activeOpacity={0.92}
+        onPress={() => (featuredCourse ? router.push(`/course/${featuredCourse.id}` as any) : router.push("/(tabs)/practice"))}
+        style={[styles.heroCard, { backgroundColor: theme.mode === "dark" ? "#11232c" : "#103d2f" }]}
+      >
+        <View style={styles.heroGlowLeft} />
+        <View style={styles.heroGlowRight} />
         <View style={styles.heroContent}>
+          <View style={styles.heroChipRow}>
+            <View style={styles.heroChip}>
+              <Ionicons name="flame-outline" size={14} color="#9ddf6f" />
+              <Text style={styles.heroChipText}>Racha x{user?.streak || 0}</Text>
+            </View>
+            <View style={styles.heroChip}>
+              <Ionicons name="sparkles-outline" size={14} color="#9ddf6f" />
+              <Text style={styles.heroChipText}>XP {user?.xp || 0}</Text>
+            </View>
+          </View>
           <Text style={styles.heroEyebrow}>Meta del día</Text>
           <Text style={styles.heroTitle}>Supera 3 retos y gana estrellas</Text>
           <Text style={styles.heroText}>
             Mientras más estrellas consigas, más rápido desbloqueas las fases avanzadas.
           </Text>
+          <View style={[styles.goalTrack, { backgroundColor: "rgba(255,255,255,0.14)" }]}>
+            <Animated.View style={[styles.goalFill, { width: animatedGoalWidth }]} />
+            <Text style={styles.goalText}>
+              {Math.min(progressSummary.completedLessons, dailyGoal)}/{dailyGoal} retos del día
+            </Text>
+          </View>
         </View>
         <View style={styles.heroStats}>
           <View style={styles.heroStatCard}>
@@ -128,20 +220,37 @@ export default function HomeScreen() {
             <Text style={styles.heroStatLabel}>estrellas</Text>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
+      </Animated.View>
 
-      <View style={styles.summaryRow}>
-        <View style={[styles.summaryCard, { backgroundColor: theme.surfaceMuted }]}>
+      <Animated.View
+        style={[
+          styles.summaryRow,
+          {
+            opacity: entrance,
+            transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }],
+          },
+        ]}
+      >
+        <TouchableOpacity
+          style={[styles.summaryCard, { backgroundColor: theme.surfaceMuted }]}
+          onPress={() => router.push("/(tabs)/vocab")}
+          activeOpacity={0.88}
+        >
           <Ionicons name="checkmark-circle-outline" size={20} color={theme.primary} />
           <Text style={[styles.summaryValue, { color: theme.text }]}>{progressSummary.completedLessons}</Text>
           <Text style={[styles.summaryLabel, { color: theme.textSoft }]}>lecciones superadas</Text>
-        </View>
-        <View style={[styles.summaryCard, { backgroundColor: theme.surfaceMuted }]}>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.summaryCard, { backgroundColor: theme.surfaceMuted }]}
+          onPress={() => router.push("/(tabs)/practice")}
+          activeOpacity={0.88}
+        >
           <Ionicons name="bar-chart-outline" size={20} color={theme.secondary} />
           <Text style={[styles.summaryValue, { color: theme.text }]}>{progressSummary.totalAttempts}</Text>
           <Text style={[styles.summaryLabel, { color: theme.textSoft }]}>intentos totales</Text>
-        </View>
-      </View>
+        </TouchableOpacity>
+      </Animated.View>
 
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: theme.text }]}>Rutas de aprendizaje</Text>
@@ -151,24 +260,43 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.coursesGrid}>
-        {courses.map((course) => (
-          <TouchableOpacity
+        {courses.map((course, index) => (
+          <Animated.View
             key={course.id}
-            style={[styles.courseCircle, { backgroundColor: `${course.themeColor}18` }]}
-            onPress={() => router.push(`/course/${course.id}` as any)}
+            style={{
+              width: "48%",
+              opacity: entrance,
+              transform: [
+                {
+                  translateY: entrance.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [30 + index * 6, 0],
+                  }),
+                },
+              ],
+            }}
           >
-            <Ionicons
-              name={course.icon as keyof typeof Ionicons.glyphMap}
-              size={36}
-              color={course.themeColor}
-            />
-            <Text style={styles.courseTitle} numberOfLines={2}>
-              {course.title}
-            </Text>
-            <Text style={[styles.courseUnits, { color: theme.textSoft }]}>
-              {course.language} • {course.units.length} unidades
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.courseCircle, { backgroundColor: `${course.themeColor}18` }]}
+              onPress={() => router.push(`/course/${course.id}` as any)}
+              activeOpacity={0.9}
+            >
+              <View style={[styles.courseBadge, { backgroundColor: `${course.themeColor}26` }]}>
+                <Text style={[styles.courseBadgeText, { color: course.themeColor }]}>Ruta {index + 1}</Text>
+              </View>
+              <Ionicons
+                name={course.icon as keyof typeof Ionicons.glyphMap}
+                size={36}
+                color={course.themeColor}
+              />
+              <Text style={styles.courseTitle} numberOfLines={2}>
+                {course.title}
+              </Text>
+              <Text style={[styles.courseUnits, { color: theme.textSoft }]}>
+                {course.language} • {course.units.length} unidades
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
         ))}
       </View>
 
@@ -178,6 +306,7 @@ export default function HomeScreen() {
           style={[styles.continueCard, { backgroundColor: theme.surfaceAccent }]}
           onPress={() => (featuredCourse ? router.push(`/course/${featuredCourse.id}` as any) : undefined)}
           disabled={!featuredCourse}
+          activeOpacity={0.92}
         >
           <View style={[styles.continueIcon, { backgroundColor: theme.surface }]}>
             <Ionicons name="flag-outline" size={22} color={theme.text} />
@@ -198,7 +327,11 @@ export default function HomeScreen() {
 
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: theme.text }]}>Entrenas hoy</Text>
-        <View style={[styles.streakCard, { backgroundColor: theme.mode === "dark" ? "#332913" : "#fff1c9" }]}>
+        <TouchableOpacity
+          style={[styles.streakCard, { backgroundColor: theme.mode === "dark" ? "#332913" : "#fff1c9" }]}
+          onPress={() => router.push("/(tabs)/practice")}
+          activeOpacity={0.92}
+        >
           <Ionicons name="sparkles-outline" size={28} color={theme.warning} />
           <View style={styles.streakContent}>
             <Text style={[styles.streakDays, { color: theme.warning }]}>Mercado, tiempo, medidas y lógica</Text>
@@ -206,7 +339,7 @@ export default function HomeScreen() {
               Ahora también sumamos patrones, factor faltante, teclado mental y construcción de ecuaciones.
             </Text>
           </View>
-        </View>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -260,9 +393,49 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 20,
     marginBottom: 20,
+    overflow: "hidden",
+    position: "relative",
+  },
+  heroGlowLeft: {
+    position: "absolute",
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: "rgba(88, 204, 2, 0.14)",
+    top: -60,
+    left: -50,
+  },
+  heroGlowRight: {
+    position: "absolute",
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: "rgba(32, 184, 255, 0.12)",
+    right: -40,
+    bottom: -40,
   },
   heroContent: {
     marginBottom: 18,
+  },
+  heroChipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 12,
+  },
+  heroChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  heroChipText: {
+    color: "#d6f1c5",
+    fontSize: 12,
+    fontWeight: "800",
   },
   heroEyebrow: {
     color: "#9ddf6f",
@@ -286,6 +459,27 @@ const styles = StyleSheet.create({
   heroStats: {
     flexDirection: "row",
     gap: 10,
+  },
+  goalTrack: {
+    marginTop: 16,
+    height: 18,
+    borderRadius: 999,
+    overflow: "hidden",
+    justifyContent: "center",
+  },
+  goalFill: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 999,
+    backgroundColor: "#7fe33d",
+  },
+  goalText: {
+    color: "#fff",
+    fontWeight: "800",
+    fontSize: 12,
+    textAlign: "center",
   },
   heroStatCard: {
     flex: 1,
@@ -344,6 +538,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 16,
     padding: 18,
+    overflow: "hidden",
+    position: "relative",
+  },
+  courseBadge: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  courseBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    textTransform: "uppercase",
   },
   courseTitle: {
     fontSize: 14,

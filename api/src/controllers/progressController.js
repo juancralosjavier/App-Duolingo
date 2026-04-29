@@ -1,5 +1,7 @@
 const prisma = require("../lib/prisma");
 
+const MAX_HEARTS = 5;
+
 const clampStars = (accuracy) => {
   if (accuracy >= 90) return 3;
   if (accuracy >= 75) return 2;
@@ -7,16 +9,22 @@ const clampStars = (accuracy) => {
   return 0;
 };
 
+const clampHearts = (value) => Math.max(0, Math.min(MAX_HEARTS, value));
+
 const saveProgress = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { lessonId, completed, score, accuracy, stars } = req.body;
+    const { lessonId, completed, score, accuracy, stars, heartsRemaining } = req.body;
 
     if (!lessonId || typeof score !== "number" || typeof accuracy !== "number") {
       return res.status(400).json({ error: "Faltan datos de progreso válidos" });
     }
 
     const normalizedStars = Math.max(0, Math.min(3, stars ?? clampStars(accuracy)));
+    const normalizedHearts =
+      typeof heartsRemaining === "number" && Number.isFinite(heartsRemaining)
+        ? clampHearts(heartsRemaining)
+        : null;
 
     const existing = await prisma.userProgress.findUnique({
       where: {
@@ -73,13 +81,23 @@ const saveProgress = async (req, res) => {
         where: { id: userId },
         data: {
           xp: { increment: gainedXp },
-          streak: completed && !existing?.completed ? { increment: 1 } : undefined
+          streak: completed && !existing?.completed ? { increment: 1 } : undefined,
+          hearts: normalizedHearts ?? undefined,
         }
       });
     } else {
-      updatedUser = await prisma.user.findUnique({
-        where: { id: userId }
-      });
+      if (normalizedHearts !== null) {
+        updatedUser = await prisma.user.update({
+          where: { id: userId },
+          data: {
+            hearts: normalizedHearts,
+          }
+        });
+      } else {
+        updatedUser = await prisma.user.findUnique({
+          where: { id: userId }
+        });
+      }
     }
 
     res.json({

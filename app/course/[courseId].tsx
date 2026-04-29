@@ -234,7 +234,14 @@ export default function CourseScreen() {
 
         <LessonPath
           units={lessonUnits}
-          onLessonPress={(lessonId) => router.push(`/lesson/${lessonId}` as any)}
+          onLessonPress={(lessonId) =>
+            router.push({
+              pathname: `/lesson/${lessonId}` as any,
+              params: {
+                returnTo: `/course/${course.id}`,
+              },
+            })
+          }
         />
       </ScrollView>
     </SafeAreaView>

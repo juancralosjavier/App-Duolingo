@@ -842,6 +842,243 @@ const courses = [
           },
         ],
       },
+      {
+        title: "Funciones y proporciones",
+        summary: "Relaciona variables, tasas y crecimiento lineal con problemas de primer semestre.",
+        order: 3,
+        requiredXp: 520,
+        lessons: [
+          {
+            title: "Funciones lineales",
+            summary: "Completa tablas de valores y evalúa funciones simples.",
+            order: 1,
+            difficulty: 4,
+            challengeType: "pattern_grid_choice",
+            requiredStars: 2,
+            icon: "trending-up-outline",
+            questions: [
+              {
+                order: 1,
+                text: "Continúa la tabla de f(x) = 2x + 3",
+                type: "pattern_grid_choice",
+                difficulty: 4,
+                explanation: "La regla es multiplicar x por 2 y sumar 3. Para x = 3, f(3) = 2 × 3 + 3 = 9.",
+                promptData: {
+                  rows: [
+                    ["x = 1", "5"],
+                    ["x = 2", "7"],
+                    ["x = 3", "?"],
+                  ],
+                  missingRow: 2,
+                  missingCol: 1,
+                },
+                options: [
+                  option("8", false, 1),
+                  option("9", true, 2),
+                  option("11", false, 3),
+                ],
+              },
+              {
+                order: 2,
+                text: "Escribe la respuesta",
+                type: "numeric_keypad",
+                difficulty: 4,
+                explanation: "Si f(x) = 3x - 1, entonces f(5) = 3 × 5 - 1 = 14.",
+                promptData: {
+                  equationTokens: ["f(5)", "=", "3×5", "-", "1"],
+                  placeholder: "Valor de f(5)",
+                },
+                options: [option("14", true, 1)],
+              },
+              {
+                order: 3,
+                text: "Ordena los pasos para hallar f(4) si f(x)=5x+2",
+                type: "sequence_choice",
+                difficulty: 4,
+                explanation: "Primero sustituyes x por 4, luego multiplicas y al final sumas.",
+                options: [
+                  option("Sustituye x por 4", true, 1),
+                  option("Calcula 5 × 4 = 20", true, 2),
+                  option("Suma 20 + 2 para obtener 22", true, 3),
+                ],
+              },
+            ],
+          },
+          {
+            title: "Razones y tasas",
+            summary: "Compara precios, velocidades y relaciones por unidad.",
+            order: 2,
+            difficulty: 4,
+            challengeType: "logic",
+            requiredStars: 3,
+            icon: "speedometer-outline",
+            questions: [
+              {
+                order: 1,
+                text: "Si 3 cuadernos cuestan Bs 45, ¿cuánto cuesta 1 cuaderno?",
+                type: "numeric_keypad",
+                difficulty: 3,
+                explanation: "La tasa por unidad se calcula dividiendo 45 entre 3.",
+                promptData: {
+                  equationTokens: ["45", "÷", "3", "=", "?"],
+                  placeholder: "Precio unitario",
+                },
+                options: [option("15", true, 1)],
+              },
+              {
+                order: 2,
+                text: "Selecciona la respuesta",
+                type: "missing_factor_choice",
+                difficulty: 3,
+                explanation: "Si 5 × ? = 60, el factor faltante es 60 ÷ 5 = 12.",
+                promptData: {
+                  equationTokens: ["5", "×", "?", "=", "60"],
+                },
+                options: [
+                  option("10", false, 1),
+                  option("12", true, 2),
+                  option("15", false, 3),
+                ],
+              },
+              {
+                order: 3,
+                text: "Ordena los pasos para comparar Bs 120 por 4 libros con Bs 150 por 5 libros.",
+                type: "sequence_choice",
+                difficulty: 4,
+                explanation: "Ambas ofertas cuestan Bs 30 por libro, por eso son equivalentes.",
+                options: [
+                  option("Calcula 120 ÷ 4 = 30 por libro", true, 1),
+                  option("Calcula 150 ÷ 5 = 30 por libro", true, 2),
+                  option("Concluye que las dos ofertas cuestan igual por unidad", true, 3),
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        title: "Potencias y raíces",
+        summary: "Entrena reglas cortas de exponentes, raíces y equivalencias.",
+        order: 4,
+        requiredXp: 640,
+        lessons: [
+          {
+            title: "Potencias rápidas",
+            summary: "Calcula potencias pequeñas y reconoce equivalencias sin calculadora.",
+            order: 1,
+            difficulty: 4,
+            challengeType: "numeric_keypad",
+            requiredStars: 2,
+            icon: "flash-outline",
+            questions: [
+              {
+                order: 1,
+                text: "Escribe la respuesta",
+                type: "numeric_keypad",
+                difficulty: 3,
+                explanation: "2³ significa 2 × 2 × 2, que da 8.",
+                promptData: {
+                  equationTokens: ["2³", "=", "?"],
+                  placeholder: "Resultado",
+                },
+                options: [option("8", true, 1)],
+              },
+              {
+                order: 2,
+                text: "Selecciona la respuesta",
+                type: "missing_factor_choice",
+                difficulty: 4,
+                explanation: "3² = 9. Entonces 3² × 3 = 27, porque 9 × 3 = 27.",
+                promptData: {
+                  equationTokens: ["3²", "×", "?", "=", "27"],
+                },
+                options: [
+                  option("2", false, 1),
+                  option("3", true, 2),
+                  option("9", false, 3),
+                ],
+              },
+              {
+                order: 3,
+                text: "Escribe la raíz cuadrada de 49",
+                type: "numeric_keypad",
+                difficulty: 3,
+                explanation: "La raíz cuadrada de 49 es 7, porque 7 × 7 = 49.",
+                promptData: {
+                  equationTokens: ["√49", "=", "?"],
+                  placeholder: "Resultado",
+                },
+                options: [option("7", true, 1)],
+              },
+            ],
+          },
+          {
+            title: "Equivalencias algebraicas",
+            summary: "Construye igualdades usando fichas y operaciones.",
+            order: 2,
+            difficulty: 5,
+            challengeType: "equation_builder",
+            requiredStars: 3,
+            icon: "cube-outline",
+            questions: [
+              {
+                order: 1,
+                text: "Completa la ecuación",
+                type: "equation_builder",
+                difficulty: 4,
+                explanation: "64 puede representarse como 8 × 8.",
+                promptData: {
+                  target: "64",
+                  tokens: ["8", "×", "8", "4", "+", "12", "÷"],
+                  solution: ["8", "×", "8"],
+                },
+                options: [
+                  option("8", true, 1),
+                  option("×", true, 2),
+                  option("8", true, 3),
+                  option("4", false, 4),
+                  option("+", false, 5),
+                  option("12", false, 6),
+                  option("÷", false, 7),
+                ],
+              },
+              {
+                order: 2,
+                text: "Completa la ecuación",
+                type: "equation_builder",
+                difficulty: 5,
+                explanation: "48 también puede escribirse como 6 × 8.",
+                promptData: {
+                  target: "48",
+                  tokens: ["6", "×", "8", "2", "+", "30", "÷"],
+                  solution: ["6", "×", "8"],
+                },
+                options: [
+                  option("6", true, 1),
+                  option("×", true, 2),
+                  option("8", true, 3),
+                  option("2", false, 4),
+                  option("+", false, 5),
+                  option("30", false, 6),
+                  option("÷", false, 7),
+                ],
+              },
+              {
+                order: 3,
+                text: "Ordena los pasos para simplificar 2³ × 2²",
+                type: "sequence_choice",
+                difficulty: 5,
+                explanation: "Cuando multiplicas potencias de la misma base, sumas exponentes: 2³ × 2² = 2⁵ = 32.",
+                options: [
+                  option("Reconoce que ambas potencias tienen base 2", true, 1),
+                  option("Suma los exponentes 3 + 2 = 5", true, 2),
+                  option("Calcula 2⁵ = 32", true, 3),
+                ],
+              },
+            ],
+          },
+        ],
+      },
     ],
   },
 ];
@@ -943,12 +1180,18 @@ async function main() {
   console.log("Semilla lista. Usuario demo: demo@matecamba.bo / mate1234");
 }
 
-main()
-  .catch((error) => {
-    console.error("No se pudo sembrar la base de datos.");
-    console.error(error.message || error);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+if (require.main === module) {
+  main()
+    .catch((error) => {
+      console.error("No se pudo sembrar la base de datos.");
+      console.error(error.message || error);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}
+
+module.exports = {
+  courses,
+};

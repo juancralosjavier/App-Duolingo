@@ -129,6 +129,24 @@ export default function PracticeScreen() {
       title: "Constructor algebraico",
       desc: "Arma ecuaciones con fichas y completa igualdades.",
     },
+    {
+      key: "logic",
+      icon: "bulb-outline" as const,
+      title: "Lógica universitaria",
+      desc: "Resuelve pasos de funciones, tasas y despejes iniciales.",
+    },
+    {
+      key: "mixed",
+      icon: "shuffle-outline" as const,
+      title: "Reto mixto",
+      desc: "Combina cálculo, selección, secuencias y lectura de datos.",
+    },
+    {
+      key: "speed",
+      icon: "timer-outline" as const,
+      title: "Ritmo rápido",
+      desc: "Entrena cálculos cortos bajo presión mental.",
+    },
   ];
 
   const launchMode = (type: string) => {
@@ -138,7 +156,12 @@ export default function PracticeScreen() {
       lessonPool.find((item) => !item.completed) ||
       lessonPool[0];
     if (lesson) {
-      router.push(`/lesson/${lesson.id}` as any);
+      router.push({
+        pathname: `/lesson/${lesson.id}` as any,
+        params: {
+          returnTo: "/(tabs)/practice",
+        },
+      });
     }
   };
 
@@ -196,7 +219,14 @@ export default function PracticeScreen() {
             <TouchableOpacity
               key={lesson.id}
               style={[styles.lessonCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-              onPress={() => router.push(`/lesson/${lesson.id}` as any)}
+              onPress={() =>
+                router.push({
+                  pathname: `/lesson/${lesson.id}` as any,
+                  params: {
+                    returnTo: "/(tabs)/practice",
+                  },
+                })
+              }
             >
               <View style={[styles.lessonIcon, { backgroundColor: theme.surfaceAccent }]}>
                 <Ionicons

@@ -31,6 +31,8 @@ const IS_REMOTE_API = API_URL.startsWith("https://");
 const REQUEST_TIMEOUT_MS = IS_REMOTE_API ? 45000 : 10000;
 const HEALTH_TIMEOUT_MS = IS_REMOTE_API ? 35000 : 8000;
 const WARMUP_COOLDOWN_MS = 4 * 60 * 1000;
+const REMOTE_WARMUP_RETRY_DELAYS_MS = [0, 1500, 4000];
+const REMOTE_REQUEST_RETRY_DELAYS_MS = [0, 2500, 5000];
 
 let lastWarmupAt = 0;
 let warmupPromise = null;
@@ -47,6 +49,10 @@ function buildTimeoutMessage() {
   return IS_REMOTE_API
     ? "La solicitud tardó demasiado. Render puede tardar en despertar en el plan gratis. Espera unos segundos y toca Reintentar."
     : "La solicitud tardó demasiado. Revisa que el backend esté corriendo y que el celular esté en la misma red.";
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function isRetryableNetworkError(error) {
@@ -98,11 +104,27 @@ export async function warmUpApi(force = false) {
 
   warmupPromise = (async () => {
     try {
-      const response = await fetchWithTimeout(`${API_ORIGIN}/health`, {}, HEALTH_TIMEOUT_MS);
-      if (!response.ok) {
-        throw new Error("No se pudo despertar la API pública.");
+      let lastError = null;
+
+      for (const delay of REMOTE_WARMUP_RETRY_DELAYS_MS) {
+        if (delay > 0) {
+          await wait(delay);
+        }
+
+        try {
+          const response = await fetchWithTimeout(`${API_ORIGIN}/health`, {}, HEALTH_TIMEOUT_MS);
+          if (!response.ok) {
+            throw new Error("No se pudo despertar la API pública.");
+          }
+
+          lastWarmupAt = Date.now();
+          return;
+        } catch (error) {
+          lastError = error;
+        }
       }
-      lastWarmupAt = Date.now();
+
+      throw lastError || new Error("No se pudo despertar la API pública.");
     } finally {
       warmupPromise = null;
     }
@@ -156,26 +178,39 @@ async function apiRequest(path, options = {}, requireAuth = false) {
     return data;
   };
 
-  try {
-    return await executeRequest();
-  } catch (error) {
-    if (IS_REMOTE_API && isRetryableNetworkError(error)) {
-      await warmUpApi(true);
+  const executeRemoteRequestWithRetry = async () => {
+    let lastError = null;
+
+    for (const delay of REMOTE_REQUEST_RETRY_DELAYS_MS) {
+      if (delay > 0) {
+        await wait(delay);
+      }
+
+      if (delay > 0) {
+        try {
+          await warmUpApi(true);
+        } catch (_warmupError) {
+          // Dejamos que el intento real defina si la API ya quedó disponible.
+        }
+      }
+
       try {
         return await executeRequest();
-      } catch (retryError) {
-        if (retryError?.name === "AbortError") {
-          throw new Error(buildTimeoutMessage());
+      } catch (error) {
+        lastError = error;
+
+        if (!isRetryableNetworkError(error)) {
+          throw error;
         }
-        if (isRetryableNetworkError(retryError)) {
-          throw new Error(
-            "No se pudo conectar con la API pública. Revisa tu conexión a internet y vuelve a intentar en unos segundos."
-          );
-        }
-        throw retryError;
       }
     }
 
+    throw lastError;
+  };
+
+  try {
+    return IS_REMOTE_API ? await executeRemoteRequestWithRetry() : await executeRequest();
+  } catch (error) {
     if (error?.name === "AbortError") {
       throw new Error(buildTimeoutMessage());
     }

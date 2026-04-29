@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { resetUserPassword } from "../services/api";
+import { resetUserPassword, warmUpApi } from "../services/api";
 import { useAppTheme } from "../hooks/useAppTheme";
 
 export default function ForgotPasswordScreen() {
@@ -23,7 +23,31 @@ export default function ForgotPasswordScreen() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [warmingUp, setWarmingUp] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+
+    const bootApi = async () => {
+      try {
+        setWarmingUp(true);
+        await warmUpApi();
+      } catch (warmupError) {
+        console.log("Warmup forgot-password:", warmupError);
+      } finally {
+        if (mounted) {
+          setWarmingUp(false);
+        }
+      }
+    };
+
+    void bootApi();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleResetPassword = async () => {
     const normalizedEmail = email.trim().toLowerCase();
@@ -136,6 +160,11 @@ export default function ForgotPasswordScreen() {
             </View>
 
             {error ? <Text style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
+            {warmingUp && !loading ? (
+              <Text style={[styles.helperText, { color: theme.textSoft }]}>
+                Preparando el servidor para actualizar tu acceso...
+              </Text>
+            ) : null}
 
             <TouchableOpacity
               style={[styles.button, { backgroundColor: theme.primary }, loading && styles.buttonDisabled]}
@@ -231,6 +260,10 @@ const styles = StyleSheet.create({
   },
   error: {
     fontSize: 14,
+    textAlign: "center",
+  },
+  helperText: {
+    fontSize: 13,
     textAlign: "center",
   },
   button: {

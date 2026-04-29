@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { register } from "../services/api";
+import { register, warmUpApi } from "../services/api";
 import { useAuth } from "../hooks/useAuth";
 import { useAppTheme } from "../hooks/useAppTheme";
 
@@ -26,6 +26,7 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [warmingUp, setWarmingUp] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -33,6 +34,29 @@ export default function RegisterScreen() {
       router.replace("/(tabs)");
     }
   }, [authLoading, router, user]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const bootApi = async () => {
+      try {
+        setWarmingUp(true);
+        await warmUpApi();
+      } catch (warmupError) {
+        console.log("Warmup register:", warmupError);
+      } finally {
+        if (mounted) {
+          setWarmingUp(false);
+        }
+      }
+    };
+
+    void bootApi();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleRegister = async () => {
     if (!name.trim() || !email.trim() || !password.trim()) {
@@ -148,6 +172,11 @@ export default function RegisterScreen() {
             </TouchableOpacity>
 
             {error ? <Text style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
+            {warmingUp && !loading ? (
+              <Text style={[styles.helperText, { color: theme.textSoft }]}>
+                Preparando el servidor para crear tu cuenta...
+              </Text>
+            ) : null}
 
             <TouchableOpacity
               style={[styles.button, { backgroundColor: theme.primary }, loading && styles.buttonDisabled]}
@@ -254,6 +283,10 @@ const styles = StyleSheet.create({
   error: {
     color: "#ff4b4b",
     fontSize: 14,
+    textAlign: "center",
+  },
+  helperText: {
+    fontSize: 13,
     textAlign: "center",
   },
   button: {

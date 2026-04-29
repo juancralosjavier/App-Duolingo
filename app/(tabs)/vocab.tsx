@@ -1,131 +1,278 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { getCourses, getUserProgress } from "../../services/api";
 import { useAppTheme } from "../../hooks/useAppTheme";
+import { useAuth } from "../../hooks/useAuth";
 
-const challengeData = [
+interface ProgressRecord {
+  lessonId: number;
+  completed: boolean;
+  accuracy: number;
+  attempts: number;
+  lesson?: {
+    id: number;
+    title: string;
+    challengeType: string;
+    difficulty: number;
+  };
+}
+
+interface ProgressResponse {
+  records: ProgressRecord[];
+  summary: {
+    completedLessons: number;
+    totalStars: number;
+    totalAttempts: number;
+  };
+}
+
+interface Course {
+  id: number;
+  title: string;
+  icon: string;
+  units: { lessons: { id: number }[] }[];
+}
+
+const challengeLibrary = [
   {
-    category: "Mercado y cambio",
-    icon: "cart-outline",
-    items: [
-      { label: "Cambio exacto", detail: "Calcula vueltas y descuentos rápidos sin calculadora." },
-      { label: "Costo por kilos", detail: "Multiplica precios por cantidad con precisión." },
-      { label: "Secuencia de compra", detail: "Ordena pasos para resolver compras compuestas." },
-    ],
+    title: "Patrones",
+    detail: "Lee tablas, completa secuencias y detecta regularidades rápidas.",
+    icon: "grid-outline" as const,
   },
   {
-    category: "Micros y horarios",
-    icon: "bus-outline",
-    items: [
-      { label: "Tiempo transcurrido", detail: "Resta y suma minutos para llegar a tiempo." },
-      { label: "Llegada estimada", detail: "Predice horarios según duración del trayecto." },
-      { label: "Frecuencia", detail: "Calcula cuántas veces pasa una ruta en un periodo." },
-    ],
+    title: "Cálculo mental",
+    detail: "Multiplicaciones, despejes y respuestas con teclado numérico.",
+    icon: "flash-outline" as const,
   },
   {
-    category: "Cancha, patio y medidas",
-    icon: "shapes-outline",
-    items: [
-      { label: "Perímetro", detail: "Bordes, cercos y recorridos." },
-      { label: "Área", detail: "Cobertura de piso, cancha o terreno." },
-      { label: "Conversión", detail: "Pasa de cm a m sin perder contexto." },
-    ],
-  },
-  {
-    category: "Fracciones y porciones",
-    icon: "pie-chart-outline",
-    items: [
-      { label: "Mitad y cuarto", detail: "Porciones exactas para cocina o reparto." },
-      { label: "Duplicar receta", detail: "Aumenta ingredientes con lógica." },
-      { label: "Reparto justo", detail: "Divide cantidades entre grupos." },
-    ],
+    title: "Constructor",
+    detail: "Arma ecuaciones con fichas para reforzar lógica algebraica.",
+    icon: "construct-outline" as const,
   },
 ];
 
-const phases = [
-  { title: "Fase 1 · Semillero", detail: "Introduce cálculo mental, cambio y totales básicos." },
-  { title: "Fase 2 · Mercado", detail: "Activa compras, tiempo y lectura de datos simples." },
-  { title: "Fase 3 · Ruta", detail: "Mezcla geometría, fracciones y lógica encadenada." },
-  { title: "Fase 4 · Maestría", detail: "Exige secuencias, precisión y mejor control de error." },
-];
+function ProgressTask({
+  title,
+  progress,
+  target,
+  icon,
+  color,
+  theme,
+}: {
+  title: string;
+  progress: number;
+  target: number;
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+  theme: any;
+}) {
+  const value = Math.min(progress, target);
+  const percentage = target > 0 ? (value / target) * 100 : 0;
+  const unlocked = value >= target;
+
+  return (
+    <View style={[styles.taskCard, { borderBottomColor: theme.border }]}>
+      <View style={styles.taskHeader}>
+        <Text style={[styles.taskTitle, { color: theme.text }]}>{title}</Text>
+        <View style={[styles.taskChest, { backgroundColor: unlocked ? `${color}20` : theme.surfaceMuted }]}>
+          <Ionicons
+            name={unlocked ? "gift" : "lock-closed"}
+            size={18}
+            color={unlocked ? color : theme.textSoft}
+          />
+        </View>
+      </View>
+
+      <View style={[styles.track, { backgroundColor: theme.surfaceMuted }]}>
+        <View style={[styles.trackFill, { width: `${percentage}%`, backgroundColor: color }]} />
+        <View style={styles.trackContent}>
+          <Ionicons name={icon} size={14} color="#fff" />
+          <Text style={styles.trackText}>
+            {value}/{target}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
 
 export default function ChallengeScreen() {
+  const router = useRouter();
   const { theme } = useAppTheme();
-  const [expanded, setExpanded] = useState<string | null>(challengeData[0].category);
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [progressData, setProgressData] = useState<ProgressResponse | null>(null);
+  const [courses, setCourses] = useState<Course[]>([]);
 
-  const toggleCategory = (category: string) => {
-    setExpanded(expanded === category ? null : category);
+  useEffect(() => {
+    void loadData();
+  }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const [progressResponse, coursesResponse] = await Promise.all([getUserProgress(), getCourses()]);
+      setProgressData(progressResponse);
+      setCourses(coursesResponse);
+    } catch (loadError: any) {
+      setError(loadError.message || "No se pudieron cargar los retos");
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const summary = progressData?.summary || {
+    completedLessons: 0,
+    totalStars: 0,
+    totalAttempts: 0,
+  };
+  const records = progressData?.records || [];
+
+  const monthlyTarget = 15;
+  const monthlyProgress = Math.min(monthlyTarget, summary.totalStars + Math.max(0, summary.completedLessons - 1));
+  const streakGoal = user?.streak && user.streak > 0 ? 1 : 0;
+  const highAccuracyCount = records.filter((record) => record.accuracy >= 80).length;
+  const practiceMinutes = Math.min(5, summary.totalAttempts);
+  const activeLessons = useMemo(
+    () => courses.reduce((sum, course) => sum + course.units.reduce((acc, unit) => acc + unit.lessons.length, 0), 0),
+    [courses]
+  );
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.loadingContainer, { backgroundColor: theme.background }]} edges={["bottom"]}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={[styles.loadingContainer, { backgroundColor: theme.background }]} edges={["bottom"]}>
+        <Ionicons name="warning-outline" size={44} color={theme.warning} />
+        <Text style={[styles.errorText, { color: theme.textSoft }]}>{error}</Text>
+        <TouchableOpacity style={[styles.primaryButton, { backgroundColor: theme.primary }]} onPress={loadData}>
+          <Text style={styles.primaryButtonText}>Reintentar</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={["bottom"]}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <Text style={[styles.title, { color: theme.text }]}>Retos y fases</Text>
-        <Text style={[styles.subtitle, { color: theme.textSoft }]}>
-          Así se organiza la dificultad para que el progreso se sienta justo y creciente.
-        </Text>
-
-        <View style={styles.statsRow}>
-          <View style={[styles.statCard, { backgroundColor: theme.surfaceAccent }]}>
-            <Text style={[styles.statNumber, { color: theme.primary }]}>4</Text>
-            <Text style={[styles.statLabel, { color: theme.primary }]}>modos de juego</Text>
+        <View style={[styles.hero, { backgroundColor: "#10a4f0" }]}>
+          <View style={styles.heroContent}>
+            <Text style={styles.heroTitle}>Desafío del mes</Text>
+            <Text style={styles.heroTimer}>Queda 1 día</Text>
           </View>
-          <View style={[styles.statCard, { backgroundColor: theme.surfaceAccent }]}>
-            <Text style={[styles.statNumber, { color: theme.primary }]}>4</Text>
-            <Text style={[styles.statLabel, { color: theme.primary }]}>fases base</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: theme.surfaceAccent }]}>
-            <Text style={[styles.statNumber, { color: theme.primary }]}>3★</Text>
-            <Text style={[styles.statLabel, { color: theme.primary }]}>máximo por reto</Text>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Fases de avance</Text>
-          {phases.map((phase) => (
-            <View key={phase.title} style={[styles.phaseCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <Ionicons name="layers-outline" size={20} color={theme.secondary} />
-              <View style={styles.phaseContent}>
-                <Text style={[styles.phaseTitle, { color: theme.text }]}>{phase.title}</Text>
-                <Text style={[styles.phaseText, { color: theme.textSoft }]}>{phase.detail}</Text>
+          <View style={[styles.heroProgressCard, { backgroundColor: "#102630" }]}>
+            <Text style={styles.heroProgressTitle}>Gana 15 puntos de desafío</Text>
+            <View style={[styles.track, { backgroundColor: "#314855" }]}>
+              <View style={[styles.trackFill, { width: `${(monthlyProgress / monthlyTarget) * 100}%`, backgroundColor: "#3cb8ff" }]} />
+              <View style={styles.trackContent}>
+                <Ionicons name="diamond-outline" size={14} color="#fff" />
+                <Text style={styles.trackText}>
+                  {monthlyProgress} / {monthlyTarget}
+                </Text>
               </View>
             </View>
-          ))}
+          </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Biblioteca de desafíos</Text>
-          {challengeData.map((category) => (
-            <View key={category.category} style={[styles.categoryCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <TouchableOpacity
-                style={styles.categoryHeader}
-                onPress={() => toggleCategory(category.category)}
-              >
-                <Ionicons
-                  name={category.icon as keyof typeof Ionicons.glyphMap}
-                  size={24}
-                  color={theme.text}
-                />
-                <Text style={[styles.categoryTitle, { color: theme.text }]}>{category.category}</Text>
-                <Text style={[styles.categoryCount, { color: theme.textSoft }]}>{category.items.length} retos</Text>
-                <Ionicons
-                  name={expanded === category.category ? "chevron-down" : "chevron-forward"}
-                  size={18}
-                  color={theme.textSoft}
-                />
-              </TouchableOpacity>
+          <Text style={[styles.sectionLabel, { color: theme.textSoft }]}>Desafío entre amigos</Text>
+          <View style={[styles.socialCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <Text style={[styles.socialText, { color: theme.text }]}>
+              ¡Completa una lección y luego abre espacio para competir con tus amigos!
+            </Text>
+            <TouchableOpacity style={[styles.outlineButton, { borderColor: theme.border }]} onPress={() => router.push("/(tabs)/profile")}>
+              <Text style={[styles.outlineButtonText, { color: theme.text }]}>Ir a mi perfil</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
-              {expanded === category.category && (
-                <View style={[styles.itemsList, { backgroundColor: theme.surfaceMuted }]}>
-                  {category.items.map((item) => (
-                    <View key={item.label} style={[styles.itemRow, { borderBottomColor: theme.border }]}>
-                      <Text style={[styles.itemLabel, { color: theme.text }]}>{item.label}</Text>
-                      <Text style={[styles.itemDetail, { color: theme.textSoft }]}>{item.detail}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
+        <View style={styles.section}>
+          <View style={styles.sectionHeading}>
+            <Text style={[styles.sectionLabel, { color: theme.textSoft }]}>Desafíos del día</Text>
+            <View style={styles.timerRow}>
+              <Ionicons name="timer-outline" size={15} color={theme.textSoft} />
+              <Text style={[styles.timerText, { color: theme.textSoft }]}>8h</Text>
+            </View>
+          </View>
+
+          <View style={[styles.dailyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <ProgressTask
+              title="Empieza una racha"
+              progress={streakGoal}
+              target={1}
+              icon="flame"
+              color="#3cb8ff"
+              theme={theme}
+            />
+            <ProgressTask
+              title="Obtén un puntaje de 80 % en 2 lecciones"
+              progress={highAccuracyCount}
+              target={2}
+              icon="speedometer"
+              color="#4da8ff"
+              theme={theme}
+            />
+            <ProgressTask
+              title="Aprende durante 5 minutos"
+              progress={practiceMinutes}
+              target={5}
+              icon="time-outline"
+              color="#ffd33d"
+              theme={theme}
+            />
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Tu tablero de progreso</Text>
+          <View style={[styles.dashboardCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <Text style={[styles.challengePointText, { color: theme.secondary }]}>+{summary.totalStars} puntos de desafío</Text>
+
+            <View style={[styles.progressBadge, { borderColor: theme.secondary }]}>
+              <Text style={[styles.progressBadgeText, { color: theme.secondary }]}>
+                Rutas activas: {courses.length}
+              </Text>
+            </View>
+
+            <View style={styles.dashboardGrid}>
+              <View style={[styles.dashboardStat, { backgroundColor: theme.surfaceMuted }]}>
+                <Text style={[styles.dashboardValue, { color: theme.text }]}>{summary.completedLessons}</Text>
+                <Text style={[styles.dashboardLabel, { color: theme.textSoft }]}>Lecciones cerradas</Text>
+              </View>
+              <View style={[styles.dashboardStat, { backgroundColor: theme.surfaceMuted }]}>
+                <Text style={[styles.dashboardValue, { color: theme.text }]}>{activeLessons}</Text>
+                <Text style={[styles.dashboardLabel, { color: theme.textSoft }]}>Retos en biblioteca</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Biblioteca interactiva</Text>
+          {challengeLibrary.map((item) => (
+            <View
+              key={item.title}
+              style={[styles.libraryCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+            >
+              <View style={[styles.libraryIcon, { backgroundColor: theme.surfaceMuted }]}>
+                <Ionicons name={item.icon} size={22} color={theme.secondary} />
+              </View>
+              <View style={styles.libraryContent}>
+                <Text style={[styles.libraryTitle, { color: theme.text }]}>{item.title}</Text>
+                <Text style={[styles.libraryText, { color: theme.textSoft }]}>{item.detail}</Text>
+              </View>
             </View>
           ))}
         </View>
@@ -137,105 +284,221 @@ export default function ChallengeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    gap: 12,
+  },
+  errorText: {
+    textAlign: "center",
+  },
+  hero: {
+    borderRadius: 26,
     padding: 20,
+    marginBottom: 24,
   },
-  title: {
+  heroContent: {
+    marginBottom: 18,
+  },
+  heroTitle: {
+    color: "#fff",
     fontSize: 28,
-    fontWeight: "bold",
-    marginBottom: 4,
+    fontWeight: "800",
+    marginBottom: 6,
   },
-  subtitle: {
+  heroTimer: {
+    color: "#dff3ff",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  heroProgressCard: {
+    borderRadius: 22,
+    padding: 18,
+  },
+  heroProgressTitle: {
+    color: "#fff",
     fontSize: 16,
-    marginBottom: 20,
+    fontWeight: "800",
+    marginBottom: 12,
   },
   section: {
     marginBottom: 24,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 14,
-  },
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 24,
-    gap: 8,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: "#dff7c8",
-    borderRadius: 16,
-    padding: 16,
-    alignItems: "center",
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#58cc02",
-  },
-  statLabel: {
-    fontSize: 11,
-    color: "#4f8a1f",
-    textAlign: "center",
-    marginTop: 4,
-  },
-  phaseCard: {
-    flexDirection: "row",
-    gap: 12,
-    alignItems: "flex-start",
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginBottom: 10,
-  },
-  phaseContent: {
-    flex: 1,
-  },
-  phaseTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#173d32",
-  },
-  phaseText: {
+  sectionLabel: {
     fontSize: 14,
-    marginTop: 4,
-    lineHeight: 20,
-  },
-  categoryCard: {
-    borderRadius: 16,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
     marginBottom: 12,
-    overflow: "hidden",
-    borderWidth: 1,
   },
-  categoryHeader: {
+  sectionHeading: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
-    gap: 12,
+    justifyContent: "space-between",
+    marginBottom: 12,
   },
-  categoryTitle: {
-    flex: 1,
+  timerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  timerText: {
+    fontWeight: "700",
+  },
+  socialCard: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 18,
+    gap: 14,
+  },
+  socialText: {
     fontSize: 16,
-    fontWeight: "bold",
+    lineHeight: 24,
+    textAlign: "center",
   },
-  categoryCount: {
-    fontSize: 12,
+  outlineButton: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: "center",
   },
-  itemsList: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+  outlineButtonText: {
+    fontWeight: "800",
   },
-  itemRow: {
-    paddingVertical: 10,
+  dailyCard: {
+    borderWidth: 1,
+    borderRadius: 24,
+    overflow: "hidden",
+  },
+  taskCard: {
+    padding: 18,
     borderBottomWidth: 1,
   },
-  itemLabel: {
-    fontSize: 14,
-    fontWeight: "600",
+  taskHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+    gap: 12,
+  },
+  taskTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "700",
+    lineHeight: 24,
+  },
+  taskChest: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  track: {
+    height: 18,
+    borderRadius: 999,
+    overflow: "hidden",
+    justifyContent: "center",
+  },
+  trackFill: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 999,
+  },
+  trackContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  trackText: {
+    color: "#fff",
+    fontWeight: "800",
+    fontSize: 12,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    marginBottom: 14,
+  },
+  dashboardCard: {
+    borderWidth: 1,
+    borderRadius: 24,
+    padding: 18,
+  },
+  challengePointText: {
+    fontSize: 28,
+    fontWeight: "800",
+    marginBottom: 14,
+  },
+  progressBadge: {
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 16,
+  },
+  progressBadgeText: {
+    fontWeight: "700",
+  },
+  dashboardGrid: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  dashboardStat: {
+    flex: 1,
+    borderRadius: 18,
+    padding: 16,
+  },
+  dashboardValue: {
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  dashboardLabel: {
+    marginTop: 6,
+    lineHeight: 20,
+  },
+  libraryCard: {
+    flexDirection: "row",
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 12,
+    gap: 14,
+  },
+  libraryIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  libraryContent: {
+    flex: 1,
+  },
+  libraryTitle: {
+    fontSize: 16,
+    fontWeight: "800",
     marginBottom: 4,
   },
-  itemDetail: {
-    fontSize: 14,
+  libraryText: {
+    lineHeight: 22,
+  },
+  primaryButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderRadius: 18,
+  },
+  primaryButtonText: {
+    color: "#fff",
+    fontWeight: "800",
   },
 });

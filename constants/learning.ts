@@ -40,6 +40,14 @@ export function getChallengeTypeLabel(type?: string) {
       return "Verdadero/Falso";
     case "sequence_choice":
       return "Secuencia";
+    case "pattern_grid_choice":
+      return "Patrón";
+    case "missing_factor_choice":
+      return "Factor faltante";
+    case "numeric_keypad":
+      return "Teclado numérico";
+    case "equation_builder":
+      return "Constructor";
     case "speed":
       return "Velocidad";
     case "logic":

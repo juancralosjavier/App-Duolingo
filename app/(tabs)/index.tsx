@@ -203,7 +203,7 @@ export default function HomeScreen() {
           <View style={styles.streakContent}>
             <Text style={[styles.streakDays, { color: theme.warning }]}>Mercado, tiempo, medidas y lógica</Text>
             <Text style={[styles.streakText, { color: theme.textSoft }]}>
-              La app ya incluye preguntas numéricas, secuencias, verdadero/falso y selección.
+              Ahora también sumamos patrones, factor faltante, teclado mental y construcción de ecuaciones.
             </Text>
           </View>
         </View>

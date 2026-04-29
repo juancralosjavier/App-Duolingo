@@ -25,7 +25,8 @@ function Stars({ count }: { count: number }) {
 }
 
 export default function ResultScreen() {
-  const { lessonId, courseId, correct, total, difficulty, heartsRemaining, title } = useLocalSearchParams();
+  const { lessonId, courseId, correct, total, difficulty, heartsRemaining, title, mistakes, reviewed, combo } =
+    useLocalSearchParams();
   const router = useRouter();
   const { updateUser } = useAuth();
   const { theme } = useAppTheme();
@@ -40,6 +41,10 @@ export default function ResultScreen() {
   const stars = getStarsFromAccuracy(accuracy);
   const passed = accuracy >= 70 && heartsNum > 0;
   const xpGained = passed ? correctNum * (8 + difficultyNum * 4) : Math.max(0, correctNum * 2);
+  const mistakeCount = Number(mistakes || 0);
+  const reviewedCount = Number(reviewed || 0);
+  const bestCombo = Number(combo || 0);
+  const challengePoints = passed ? stars + (accuracy >= 80 ? 1 : 0) : 0;
 
   React.useEffect(() => {
     if (passed) {
@@ -151,6 +156,33 @@ export default function ResultScreen() {
           <View style={styles.summaryRow}>
             <Ionicons name="star-outline" size={16} color="#ffb100" />
             <Text style={[styles.summaryText, { color: theme.textSoft }]}>Estrellas obtenidas: {stars}/3</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Ionicons name="flash-outline" size={16} color={theme.warning} />
+            <Text style={[styles.summaryText, { color: theme.textSoft }]}>Combo máximo: x{bestCombo || 1}</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Ionicons name="repeat-outline" size={16} color={theme.secondary} />
+            <Text style={[styles.summaryText, { color: theme.textSoft }]}>
+              Errores revisados al final: {reviewedCount}/{mistakeCount}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.rewardGrid}>
+          <View style={[styles.rewardCard, { borderColor: "#ffcf33", backgroundColor: theme.surface }]}>
+            <Text style={[styles.rewardLabel, { color: "#cc9a00" }]}>EXP TOTALES</Text>
+            <View style={styles.rewardValueRow}>
+              <Ionicons name="flash" size={22} color="#ffcf33" />
+              <Text style={[styles.rewardValue, { color: theme.text }]}>+{xpGained}</Text>
+            </View>
+          </View>
+          <View style={[styles.rewardCard, { borderColor: theme.secondary, backgroundColor: theme.surface }]}>
+            <Text style={[styles.rewardLabel, { color: theme.secondary }]}>PUNTOS DE DESAFÍO</Text>
+            <View style={styles.rewardValueRow}>
+              <Ionicons name="diamond" size={20} color={theme.secondary} />
+              <Text style={[styles.rewardValue, { color: theme.text }]}>+{challengePoints}</Text>
+            </View>
           </View>
         </View>
       </View>
@@ -272,6 +304,32 @@ const styles = StyleSheet.create({
     padding: 18,
     borderRadius: 16,
     marginBottom: 20,
+  },
+  rewardGrid: {
+    width: "100%",
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 18,
+  },
+  rewardCard: {
+    flex: 1,
+    borderRadius: 20,
+    borderWidth: 3,
+    padding: 16,
+  },
+  rewardLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    marginBottom: 12,
+  },
+  rewardValueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  rewardValue: {
+    fontSize: 26,
+    fontWeight: "800",
   },
   continueText: {
     color: "#fff",

@@ -105,6 +105,30 @@ export default function PracticeScreen() {
       title: "Secuencia lógica",
       desc: "Ordena pasos para llegar al resultado.",
     },
+    {
+      key: "pattern_grid_choice",
+      icon: "grid-outline" as const,
+      title: "Patrones visuales",
+      desc: "Completa tablas y detecta relaciones multiplicativas.",
+    },
+    {
+      key: "missing_factor_choice",
+      icon: "remove-outline" as const,
+      title: "Factor faltante",
+      desc: "Encuentra el número escondido dentro de la ecuación.",
+    },
+    {
+      key: "numeric_keypad",
+      icon: "keypad-outline" as const,
+      title: "Teclado mental",
+      desc: "Resuelve rápido escribiendo tu respuesta con teclado propio.",
+    },
+    {
+      key: "equation_builder",
+      icon: "construct-outline" as const,
+      title: "Constructor algebraico",
+      desc: "Arma ecuaciones con fichas y completa igualdades.",
+    },
   ];
 
   const launchMode = (type: string) => {

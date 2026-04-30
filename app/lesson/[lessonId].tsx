@@ -154,25 +154,28 @@ export default function LessonScreen() {
   const answerShake = React.useRef(new Animated.Value(0)).current;
   const successScale = React.useRef(new Animated.Value(1)).current;
   const previousHeartsRef = React.useRef(user?.hearts ?? 5);
+  const veryCompactLayout = width < 390 || height < 760;
   const compactLayout = width < 430 || height < 860;
 
   const metrics = useMemo(
     () => ({
-      promptTitleSize: compactLayout ? 22 : 28,
-      optionTextSize: compactLayout ? 17 : 21,
-      optionPaddingVertical: compactLayout ? 15 : 19,
-      equationTextSize: compactLayout ? 32 : 42,
-      targetTextSize: compactLayout ? 38 : 50,
-      patternRowHeight: compactLayout ? 84 : 108,
-      patternCellTextSize: compactLayout ? 17 : 21,
-      blankSize: compactLayout ? 54 : 64,
-      answerBoxHeight: compactLayout ? 58 : 68,
-      answerBoxMinWidth: compactLayout ? 72 : 88,
-      answerTextSize: compactLayout ? 20 : 24,
-      builderTileSize: compactLayout ? 54 : 68,
-      horizontalPadding: compactLayout ? 12 : 18,
+      promptTitleSize: veryCompactLayout ? 20 : compactLayout ? 22 : 28,
+      optionTextSize: veryCompactLayout ? 16 : compactLayout ? 17 : 21,
+      optionPaddingVertical: veryCompactLayout ? 12 : compactLayout ? 15 : 19,
+      equationTextSize: veryCompactLayout ? 28 : compactLayout ? 32 : 42,
+      targetTextSize: veryCompactLayout ? 32 : compactLayout ? 38 : 50,
+      patternRowHeight: veryCompactLayout ? 70 : compactLayout ? 84 : 108,
+      patternCellTextSize: veryCompactLayout ? 15 : compactLayout ? 17 : 21,
+      blankSize: veryCompactLayout ? 48 : compactLayout ? 54 : 64,
+      answerBoxHeight: veryCompactLayout ? 52 : compactLayout ? 58 : 68,
+      answerBoxMinWidth: veryCompactLayout ? 62 : compactLayout ? 72 : 88,
+      answerTextSize: veryCompactLayout ? 18 : compactLayout ? 20 : 24,
+      builderTileSize: veryCompactLayout ? 48 : compactLayout ? 54 : 68,
+      horizontalPadding: veryCompactLayout ? 10 : compactLayout ? 12 : 18,
+      keypadAspectRatio: veryCompactLayout ? 2.35 : compactLayout ? 2.05 : 1.55,
+      keypadGap: veryCompactLayout ? 8 : 12,
     }),
-    [compactLayout]
+    [compactLayout, veryCompactLayout]
   );
 
   const loadLesson = useCallback(async () => {
@@ -181,7 +184,9 @@ export default function LessonScreen() {
 
     try {
       const data = await getLessonDetail(Number(lessonId));
-      const startingHearts = normalizedPlayMode === "boss" ? Math.min(user?.hearts ?? 5, 3) : user?.hearts ?? 5;
+      const userHearts = user?.hearts ?? 5;
+      const startingHearts =
+        normalizedPlayMode === "boss" ? Math.max(1, Math.min(userHearts, 3)) : Math.max(userHearts, 3);
       setLesson(data);
       setHeartsRemaining(startingHearts);
       previousHeartsRef.current = startingHearts;
@@ -405,6 +410,13 @@ export default function LessonScreen() {
     if (!lesson || !question) return;
 
     if (heartsRemaining <= 0) {
+      if (phase === "main" && mistakeIds.length > 0) {
+        setReviewQueue(lesson.questions.filter((item) => mistakeIds.includes(item.id)));
+        setPhase("review_intro");
+        resetAnswerState();
+        return;
+      }
+
       finishLesson(correctCount, heartsRemaining);
       return;
     }
@@ -494,6 +506,8 @@ export default function LessonScreen() {
       ? heartsRemaining
       : Math.max(0, heartsRemaining - 1);
     const nextCorrectCount = correctCount + (correct ? 1 : 0);
+    const addsMistake = !correct && phase === "main" && !mistakeIds.includes(question.id);
+    const queuedMistakeCount = mistakeIds.length + (addsMistake ? 1 : 0);
 
     if (correct) {
       const nextCombo = comboCount + 1;
@@ -525,7 +539,7 @@ export default function LessonScreen() {
           ? "Bajamos un poco el ritmo y repasamos este error al final."
           : "Mira la explicación y vuelve a intentarlo con calma."
       );
-      if (phase === "main" && !mistakeIds.includes(question.id)) {
+      if (addsMistake) {
         setMistakeIds((current) => [...current, question.id]);
       }
       if (nextHearts !== heartsRemaining) {
@@ -552,7 +566,9 @@ export default function LessonScreen() {
         ? currentQuestionIndex >= lessonQuestionCount - 1
         : currentQuestionIndex >= reviewQueue.length - 1;
 
-    if (!correct && nextHearts <= 0) {
+    if (!correct && nextHearts <= 0 && phase === "main" && queuedMistakeCount > 0) {
+      setFeedbackAction("Repasar error");
+    } else if (!correct && nextHearts <= 0) {
       setFeedbackAction("Ver resultado");
     } else if (phase === "review" && isLastVisibleQuestion) {
       setFeedbackAction("Cerrar repaso");
@@ -877,19 +893,40 @@ export default function LessonScreen() {
             </View>
           ) : null}
 
-          <View style={styles.keypadGrid}>
+          <View style={[styles.keypadGrid, { gap: metrics.keypadGap }]}>
             {KEYPAD_VALUES.map((value) => (
               <TouchableOpacity
                 key={value}
-                style={[styles.keypadButton, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}
+                style={[
+                  styles.keypadButton,
+                  {
+                    aspectRatio: metrics.keypadAspectRatio,
+                    backgroundColor: theme.surfaceMuted,
+                    borderColor: theme.border,
+                  },
+                ]}
                 onPress={() => handleKeypadPress(value)}
               >
-                <Text style={[styles.keypadButtonText, { color: theme.text, fontSize: compactLayout ? 24 : 28 }]}>{value}</Text>
+                <Text
+                  style={[
+                    styles.keypadButtonText,
+                    { color: theme.text, fontSize: veryCompactLayout ? 21 : compactLayout ? 24 : 28 },
+                  ]}
+                >
+                  {value}
+                </Text>
               </TouchableOpacity>
             ))}
             <View style={styles.keypadSpacer} />
             <TouchableOpacity
-              style={[styles.keypadButton, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}
+              style={[
+                styles.keypadButton,
+                {
+                  aspectRatio: metrics.keypadAspectRatio,
+                  backgroundColor: theme.surfaceMuted,
+                  borderColor: theme.border,
+                },
+              ]}
               onPress={handleKeypadDelete}
             >
               <Ionicons name="backspace-outline" size={22} color={theme.text} />
@@ -1061,7 +1098,7 @@ export default function LessonScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.loadingContainer, { backgroundColor: theme.background }]} edges={["bottom"]}>
+      <SafeAreaView style={[styles.loadingContainer, { backgroundColor: theme.background }]} edges={["top", "bottom"]}>
         <ActivityIndicator size="large" color={theme.primary} />
       </SafeAreaView>
     );
@@ -1069,7 +1106,7 @@ export default function LessonScreen() {
 
   if (error || !lesson) {
     return (
-      <SafeAreaView style={[styles.errorContainer, { backgroundColor: theme.background }]} edges={["bottom"]}>
+      <SafeAreaView style={[styles.errorContainer, { backgroundColor: theme.background }]} edges={["top", "bottom"]}>
         <Ionicons name="warning-outline" size={44} color={theme.warning} />
         <Text style={[styles.errorTitle, { color: theme.text }]}>No se pudo abrir la lección</Text>
         <Text style={[styles.errorText, { color: theme.textSoft }]}>{error || "Faltan datos para mostrar este reto."}</Text>
@@ -1084,7 +1121,7 @@ export default function LessonScreen() {
     return (
       <SafeAreaView
         style={[styles.container, { backgroundColor: theme.background, paddingHorizontal: metrics.horizontalPadding }]}
-        edges={["bottom"]}
+        edges={["top", "bottom"]}
       >
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.topBar}>
@@ -1146,7 +1183,7 @@ export default function LessonScreen() {
 
   if (!question) {
     return (
-      <SafeAreaView style={[styles.loadingContainer, { backgroundColor: theme.background }]} edges={["bottom"]}>
+      <SafeAreaView style={[styles.loadingContainer, { backgroundColor: theme.background }]} edges={["top", "bottom"]}>
         <ActivityIndicator size="large" color={theme.primary} />
       </SafeAreaView>
     );
@@ -1155,7 +1192,7 @@ export default function LessonScreen() {
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.background, paddingHorizontal: metrics.horizontalPadding }]}
-      edges={["bottom"]}
+      edges={["top", "bottom"]}
     >
       <Stack.Screen options={{ headerShown: false }} />
 

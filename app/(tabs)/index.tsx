@@ -264,7 +264,7 @@ export default function HomeScreen() {
           <Animated.View
             key={course.id}
             style={{
-              width: "48%",
+              width: "100%",
               opacity: entrance,
               transform: [
                 {
@@ -277,24 +277,38 @@ export default function HomeScreen() {
             }}
           >
             <TouchableOpacity
-              style={[styles.courseCircle, { backgroundColor: `${course.themeColor}18` }]}
+              style={[
+                styles.courseCard,
+                {
+                  backgroundColor: `${course.themeColor}${theme.mode === "dark" ? "22" : "14"}`,
+                  borderColor: `${course.themeColor}38`,
+                },
+              ]}
               onPress={() => router.push(`/course/${course.id}` as any)}
               activeOpacity={0.9}
             >
-              <View style={[styles.courseBadge, { backgroundColor: `${course.themeColor}26` }]}>
-                <Text style={[styles.courseBadgeText, { color: course.themeColor }]}>Ruta {index + 1}</Text>
+              <View style={[styles.courseIconOrb, { backgroundColor: `${course.themeColor}24` }]}>
+                <Ionicons
+                  name={course.icon as keyof typeof Ionicons.glyphMap}
+                  size={34}
+                  color={course.themeColor}
+                />
+                <View style={[styles.routePill, { backgroundColor: course.themeColor }]}>
+                  <Text style={styles.routePillText}>Ruta {index + 1}</Text>
+                </View>
               </View>
-              <Ionicons
-                name={course.icon as keyof typeof Ionicons.glyphMap}
-                size={36}
-                color={course.themeColor}
-              />
-              <Text style={styles.courseTitle} numberOfLines={2}>
-                {course.title}
-              </Text>
-              <Text style={[styles.courseUnits, { color: theme.textSoft }]}>
-                {course.language} • {course.units.length} unidades
-              </Text>
+              <View style={styles.courseCopy}>
+                <Text style={[styles.courseTitle, { color: theme.text }]} numberOfLines={2}>
+                  {course.title}
+                </Text>
+                <Text style={[styles.courseUnits, { color: theme.textSoft }]}>
+                  {course.language} · {course.units.length} unidades
+                </Text>
+                <Text style={[styles.courseSummary, { color: theme.textSoft }]} numberOfLines={2}>
+                  {course.summary}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={22} color={course.themeColor} />
             </TouchableOpacity>
           </Animated.View>
         ))}
@@ -525,45 +539,59 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   coursesGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
+    gap: 14,
     marginBottom: 26,
   },
-  courseCircle: {
-    width: "48%",
-    aspectRatio: 1,
-    borderRadius: 28,
+  courseCard: {
+    minHeight: 132,
+    borderRadius: 26,
+    borderWidth: 1,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-    padding: 18,
+    gap: 14,
+    padding: 16,
     overflow: "hidden",
     position: "relative",
   },
-  courseBadge: {
+  courseIconOrb: {
+    width: 88,
+    height: 88,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  routePill: {
     position: "absolute",
-    top: 12,
-    right: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    bottom: -8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 999,
   },
-  courseBadgeText: {
+  routePillText: {
+    color: "#fff",
     fontSize: 10,
-    fontWeight: "800",
+    fontWeight: "900",
     textTransform: "uppercase",
   },
+  courseCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
   courseTitle: {
-    fontSize: 14,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginTop: 10,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "900",
     marginBottom: 4,
   },
   courseUnits: {
-    fontSize: 12,
-    textAlign: "center",
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 6,
+  },
+  courseSummary: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   section: {
     marginBottom: 24,

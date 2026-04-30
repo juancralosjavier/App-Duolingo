@@ -7,6 +7,7 @@ const { courses } = require("./seed");
 const prisma = new PrismaClient();
 
 const EXTRA_UNIT_TITLES = new Set(["Funciones y proporciones", "Potencias y raíces"]);
+const EXTRA_COURSE_TITLES = new Set(["Mate escolar y retos iniciales"]);
 
 function mapQuestion(question) {
   return {
@@ -51,6 +52,7 @@ function mapUnit(unit) {
 
 async function main() {
   validateRuntimeEnv();
+  const additions = [];
 
   const algebraCourse = courses.find((course) => course.title === "Álgebra universitaria inicial");
   if (!algebraCourse) {
@@ -76,28 +78,56 @@ async function main() {
         },
       },
     });
-    console.log("Curso de álgebra creado completo.");
-    return;
+    additions.push("Álgebra universitaria inicial");
+  } else {
+    const existingUnitTitles = new Set(course.units.map((unit) => unit.title));
+    const missingUnits = extraUnits.filter((unit) => !existingUnitTitles.has(unit.title));
+
+    if (missingUnits.length) {
+      await prisma.course.update({
+        where: { id: course.id },
+        data: {
+          units: {
+            create: missingUnits.map(mapUnit),
+          },
+        },
+      });
+
+      additions.push(missingUnits.map((unit) => unit.title).join(", "));
+    }
   }
 
-  const existingUnitTitles = new Set(course.units.map((unit) => unit.title));
-  const missingUnits = extraUnits.filter((unit) => !existingUnitTitles.has(unit.title));
+  const extraCourses = courses.filter((courseItem) => EXTRA_COURSE_TITLES.has(courseItem.title));
+  for (const extraCourse of extraCourses) {
+    const existingCourse = await prisma.course.findFirst({
+      where: { title: extraCourse.title },
+      select: { id: true },
+    });
 
-  if (!missingUnits.length) {
+    if (!existingCourse) {
+      await prisma.course.create({
+        data: {
+          title: extraCourse.title,
+          language: extraCourse.language,
+          summary: extraCourse.summary,
+          icon: extraCourse.icon,
+          themeColor: extraCourse.themeColor,
+          units: {
+            create: extraCourse.units.map(mapUnit),
+          },
+        },
+      });
+
+      additions.push(extraCourse.title);
+    }
+  }
+
+  if (!additions.length) {
     console.log("El contenido extra de matemáticas ya existe. No se modificó el progreso.");
     return;
   }
 
-  await prisma.course.update({
-    where: { id: course.id },
-    data: {
-      units: {
-        create: missingUnits.map(mapUnit),
-      },
-    },
-  });
-
-  console.log(`Contenido extra agregado sin borrar progreso: ${missingUnits.map((unit) => unit.title).join(", ")}`);
+  console.log(`Contenido extra agregado sin borrar progreso: ${additions.join(" | ")}`);
 }
 
 main()

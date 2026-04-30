@@ -65,11 +65,17 @@ interface Lesson {
 }
 
 type LessonPhase = "main" | "review_intro" | "review";
+type PlayMode = "classic" | "speed" | "boss";
 
 const SUCCESS_TITLES = ["¡Así se hace!", "¡Buen trabajo!", "¡Muy bien!"];
 const ERROR_TITLES = ["Eso estuvo difícil", "Vamos otra vez", "Casi lo logras"];
 const KEYPAD_VALUES = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
 const HEART_SLOTS = 5;
+const PLAY_MODE_LABELS: Record<PlayMode, string> = {
+  classic: "Modo clásico",
+  speed: "Modo rápido",
+  boss: "Batalla jefe",
+};
 
 function normalizeInput(value: string) {
   return value.trim().toLowerCase().replace(",", ".").replace(/\s+/g, "");
@@ -105,12 +111,16 @@ function pickFeedbackTitle(correct: boolean, phase: LessonPhase, seed: number) {
 }
 
 export default function LessonScreen() {
-  const { lessonId, returnTo } = useLocalSearchParams();
+  const { lessonId, returnTo, playMode } = useLocalSearchParams();
   const router = useRouter();
   const { theme } = useAppTheme();
   const { user, updateUser } = useAuth();
   const { playCorrect, playWrong } = useLessonFeedback();
   const { width, height } = useWindowDimensions();
+  const normalizedPlayMode: PlayMode =
+    playMode === "speed" || playMode === "boss" || playMode === "classic" ? playMode : "classic";
+  const isSpeedMode = normalizedPlayMode === "speed";
+  const isBossMode = normalizedPlayMode === "boss";
 
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);
@@ -133,11 +143,16 @@ export default function LessonScreen() {
   const [feedbackCorrectAnswer, setFeedbackCorrectAnswer] = useState("");
   const [comboCount, setComboCount] = useState(0);
   const [bestCombo, setBestCombo] = useState(0);
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const [adaptiveLevel, setAdaptiveLevel] = useState(0);
+  const [adaptiveMessage, setAdaptiveMessage] = useState("");
   const progressAnimation = React.useRef(new Animated.Value(0)).current;
   const feedbackAnimation = React.useRef(new Animated.Value(0)).current;
   const heartsScale = React.useRef(new Animated.Value(1)).current;
   const heartsShake = React.useRef(new Animated.Value(0)).current;
   const questionAnimation = React.useRef(new Animated.Value(1)).current;
+  const answerShake = React.useRef(new Animated.Value(0)).current;
+  const successScale = React.useRef(new Animated.Value(1)).current;
   const previousHeartsRef = React.useRef(user?.hearts ?? 5);
   const compactLayout = width < 430 || height < 860;
 
@@ -166,8 +181,10 @@ export default function LessonScreen() {
 
     try {
       const data = await getLessonDetail(Number(lessonId));
+      const startingHearts = normalizedPlayMode === "boss" ? Math.min(user?.hearts ?? 5, 3) : user?.hearts ?? 5;
       setLesson(data);
-      setHeartsRemaining(user?.hearts ?? 5);
+      setHeartsRemaining(startingHearts);
+      previousHeartsRef.current = startingHearts;
       setPhase("main");
       setCurrentQuestionIndex(0);
       setMistakeIds([]);
@@ -175,6 +192,9 @@ export default function LessonScreen() {
       setCorrectCount(0);
       setComboCount(0);
       setBestCombo(0);
+      setAdaptiveLevel(0);
+      setAdaptiveMessage("");
+      setSecondsLeft(0);
       setSelectedOption(null);
       setAnswerInput("");
       setSequenceSelection([]);
@@ -189,7 +209,7 @@ export default function LessonScreen() {
     } finally {
       setLoading(false);
     }
-  }, [lessonId, user?.hearts]);
+  }, [lessonId, normalizedPlayMode, user?.hearts]);
 
   useEffect(() => {
     void loadLesson();
@@ -201,7 +221,7 @@ export default function LessonScreen() {
   }, [lesson, phase, reviewQueue]);
 
   const question = activeQuestions[currentQuestionIndex];
-  const promptData = question?.promptData || {};
+  const promptData = useMemo(() => question?.promptData || {}, [question?.promptData]);
   const isReviewQuestion = phase === "review";
 
   const orderedSequence = useMemo(
@@ -240,9 +260,24 @@ export default function LessonScreen() {
       : currentQuestionIndex;
   const progress = totalSteps > 0 ? Math.max(8, ((answeredSteps + 1) / totalSteps) * 100) : 0;
   const phaseProgressColor = phase === "review" || phase === "review_intro" ? theme.warning : theme.primary;
+  const getQuestionTime = useCallback(() => {
+    if (phase !== "main") return 0;
+    const adaptiveCut = Math.max(0, adaptiveLevel);
+
+    if (isSpeedMode) return Math.max(7, 10 - adaptiveCut);
+    if (isBossMode) return Math.max(12, 15 - adaptiveCut);
+    return 0;
+  }, [adaptiveLevel, isBossMode, isSpeedMode, phase]);
+  const questionTimeLimit = getQuestionTime();
+  const showTimer = questionTimeLimit > 0 && !isReviewQuestion;
+  const timerProgress = questionTimeLimit > 0 ? Math.max(0, Math.min(100, (secondsLeft / questionTimeLimit) * 100)) : 0;
   const progressWidth = progressAnimation.interpolate({
     inputRange: [0, 1],
     outputRange: ["0%", "100%"],
+  });
+  const answerShakeTranslate = answerShake.interpolate({
+    inputRange: [-1, 1],
+    outputRange: [-8, 8],
   });
   const feedbackTranslateY = feedbackAnimation.interpolate({
     inputRange: [0, 1],
@@ -282,6 +317,10 @@ export default function LessonScreen() {
   }, [currentQuestionIndex, phase, questionAnimation]);
 
   useEffect(() => {
+    setSecondsLeft(getQuestionTime());
+  }, [currentQuestionIndex, getQuestionTime, phase, question?.id]);
+
+  useEffect(() => {
     const previousHearts = previousHeartsRef.current;
 
     if (heartsRemaining < previousHearts) {
@@ -318,6 +357,7 @@ export default function LessonScreen() {
     setFeedbackTitle("");
     setFeedbackCorrectAnswer("");
     setFeedbackAction("Continuar");
+    setAdaptiveMessage("");
   }, []);
 
   const finishLesson = useCallback(
@@ -337,11 +377,12 @@ export default function LessonScreen() {
           mistakes: String(mistakeIds.length),
           reviewed: String(reviewQueue.length),
           combo: String(bestCombo),
+          playMode: normalizedPlayMode,
           returnTo: typeof returnTo === "string" ? returnTo : `/course/${lesson.unit.course.id}`,
         },
       });
     },
-    [bestCombo, lesson, mistakeIds.length, returnTo, reviewQueue.length, router]
+    [bestCombo, lesson, mistakeIds.length, normalizedPlayMode, returnTo, reviewQueue.length, router]
   );
 
   const startReviewPhase = useCallback(() => {
@@ -413,12 +454,14 @@ export default function LessonScreen() {
     reviewQueue.length,
   ]);
 
-  const submitAnswer = async () => {
+  const submitAnswer = useCallback(async (timedOut = false) => {
     if (!question || submitted) return;
 
     let correct = false;
 
-    if (question.type === "numeric_input" || question.type === "numeric_keypad") {
+    if (timedOut) {
+      correct = false;
+    } else if (question.type === "numeric_input" || question.type === "numeric_keypad") {
       const expected = question.options.find((item) => item.isCorrect)?.text || "";
       if (!answerInput.trim()) {
         setValidationMessage("Escribe una respuesta antes de comprobar.");
@@ -454,18 +497,46 @@ export default function LessonScreen() {
 
     if (correct) {
       const nextCombo = comboCount + 1;
+      const nextAdaptiveLevel = nextCombo >= 3 ? Math.min(2, adaptiveLevel + 1) : adaptiveLevel;
+
       setCorrectCount(nextCorrectCount);
       setComboCount(nextCombo);
       setBestCombo((previous) => Math.max(previous, nextCombo));
+      setAdaptiveLevel(nextAdaptiveLevel);
+      setAdaptiveMessage(
+        nextCombo >= 3
+          ? "Subimos un punto la dificultad: menos tiempo y más foco."
+          : "Suma XP, mantén el combo y desbloquea cofres."
+      );
+      Animated.sequence([
+        Animated.timing(successScale, { toValue: 1.035, duration: 120, useNativeDriver: true }),
+        Animated.timing(successScale, { toValue: 1, duration: 180, useNativeDriver: true }),
+      ]).start();
       await playCorrect();
     } else {
+      const nextAdaptiveLevel = phase === "main" ? Math.max(-1, adaptiveLevel - 1) : adaptiveLevel;
+
       setComboCount(0);
+      setAdaptiveLevel(nextAdaptiveLevel);
+      setAdaptiveMessage(
+        timedOut
+          ? "Se acabó el tiempo. Repetiremos esta pregunta al final sin gastar energía."
+          : phase === "main"
+          ? "Bajamos un poco el ritmo y repasamos este error al final."
+          : "Mira la explicación y vuelve a intentarlo con calma."
+      );
       if (phase === "main" && !mistakeIds.includes(question.id)) {
         setMistakeIds((current) => [...current, question.id]);
       }
       if (nextHearts !== heartsRemaining) {
         void updateUser({ hearts: nextHearts });
       }
+      Animated.sequence([
+        Animated.timing(answerShake, { toValue: -1, duration: 45, useNativeDriver: true }),
+        Animated.timing(answerShake, { toValue: 1, duration: 70, useNativeDriver: true }),
+        Animated.timing(answerShake, { toValue: -0.6, duration: 55, useNativeDriver: true }),
+        Animated.timing(answerShake, { toValue: 0, duration: 45, useNativeDriver: true }),
+      ]).start();
       await playWrong();
     }
 
@@ -473,7 +544,7 @@ export default function LessonScreen() {
     setIsCorrect(correct);
     setHeartsRemaining(nextHearts);
     setValidationMessage("");
-    setFeedbackTitle(pickFeedbackTitle(correct, phase, currentQuestionIndex + correctCount));
+    setFeedbackTitle(timedOut ? "Se acabó el tiempo" : pickFeedbackTitle(correct, phase, currentQuestionIndex + correctCount));
     setFeedbackCorrectAnswer(correct ? "" : buildCorrectAnswerText(question, promptData, orderedSequence, builderSolution));
 
     const isLastVisibleQuestion =
@@ -492,7 +563,46 @@ export default function LessonScreen() {
     } else {
       setFeedbackAction("Continuar");
     }
-  };
+  }, [
+    adaptiveLevel,
+    answerInput,
+    answerShake,
+    builderSelectedTokens,
+    builderSolution,
+    comboCount,
+    correctCount,
+    currentQuestionIndex,
+    heartsRemaining,
+    lessonQuestionCount,
+    mistakeIds,
+    orderedSequence,
+    phase,
+    playCorrect,
+    playWrong,
+    promptData,
+    question,
+    reviewQueue.length,
+    selectedOption,
+    sequenceSelection,
+    submitted,
+    successScale,
+    updateUser,
+  ]);
+
+  useEffect(() => {
+    if (!showTimer || submitted || !question) return;
+
+    if (secondsLeft <= 0) {
+      void submitAnswer(true);
+      return;
+    }
+
+    const tick = setTimeout(() => {
+      setSecondsLeft((current) => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => clearTimeout(tick);
+  }, [question, secondsLeft, showTimer, submitted, submitAnswer]);
 
   const handleClose = () => {
     if (!lesson) return;
@@ -1088,13 +1198,41 @@ export default function LessonScreen() {
       </View>
 
       <View style={styles.headerMeta}>
-        {comboCount >= 2 ? (
-          <Text style={[styles.comboText, { color: theme.warning }]}>COMBO x{comboCount}</Text>
-        ) : (
-          <Text style={[styles.comboText, { color: theme.textSoft }]}>
-            {getDifficultyLabel(question.difficulty)} · {getChallengeTypeLabel(question.type)}
+        <View style={styles.metaLeft}>
+          {comboCount >= 2 ? (
+            <Text style={[styles.comboText, { color: theme.warning }]}>COMBO x{comboCount}</Text>
+          ) : (
+            <Text style={[styles.comboText, { color: theme.textSoft }]}>
+              {PLAY_MODE_LABELS[normalizedPlayMode]} · {getDifficultyLabel(question.difficulty)}
+            </Text>
+          )}
+          <Text style={[styles.modeHint, { color: theme.textSoft }]}>
+            {getChallengeTypeLabel(question.type)}
+            {adaptiveLevel > 0 ? ` · dificultad +${adaptiveLevel}` : adaptiveLevel < 0 ? " · repaso guiado" : ""}
           </Text>
-        )}
+        </View>
+
+        {showTimer ? (
+          <View style={[styles.timerPill, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}>
+            <View style={styles.timerLabelRow}>
+              <Ionicons name={isBossMode ? "flame" : "timer-outline"} size={14} color={isBossMode ? theme.warning : theme.secondary} />
+              <Text style={[styles.timerText, { color: secondsLeft <= 3 ? theme.danger : theme.text }]}>
+                {secondsLeft}s
+              </Text>
+            </View>
+            <View style={[styles.timerTrack, { backgroundColor: theme.border }]}>
+              <View
+                style={[
+                  styles.timerFill,
+                  {
+                    width: `${timerProgress}%`,
+                    backgroundColor: secondsLeft <= 3 ? theme.danger : isBossMode ? theme.warning : theme.secondary,
+                  },
+                ]}
+              />
+            </View>
+          </View>
+        ) : null}
 
         {isReviewQuestion ? (
           <View style={[styles.reviewTag, { backgroundColor: theme.mode === "dark" ? "#3c2b17" : "#fff4d9" }]}>
@@ -1109,6 +1247,7 @@ export default function LessonScreen() {
           style={{
             opacity: questionAnimation,
             transform: [
+              { translateX: answerShakeTranslate },
               {
                 translateY: questionAnimation.interpolate({
                   inputRange: [0, 1],
@@ -1121,6 +1260,7 @@ export default function LessonScreen() {
                   outputRange: [0.98, 1],
                 }),
               },
+              { scale: successScale },
             ],
           }}
         >
@@ -1177,6 +1317,12 @@ export default function LessonScreen() {
             <Text style={[styles.feedbackBody, { color: theme.textSoft }]}>
               {question.explanation || "Sigue así: cada reto te empuja un poco más."}
             </Text>
+            {adaptiveMessage ? (
+              <View style={[styles.adaptiveNote, { backgroundColor: theme.surface }]}>
+                <Ionicons name="analytics-outline" size={15} color={isCorrect ? theme.primary : theme.warning} />
+                <Text style={[styles.adaptiveNoteText, { color: theme.textSoft }]}>{adaptiveMessage}</Text>
+              </View>
+            ) : null}
             {!isCorrect && feedbackCorrectAnswer ? (
               <Text style={[styles.correctAnswerText, { color: theme.text }]}>
                 Respuesta correcta: {feedbackCorrectAnswer}
@@ -1193,7 +1339,7 @@ export default function LessonScreen() {
             },
             !submitted && !canSubmit && { backgroundColor: theme.border },
           ]}
-          onPress={submitted ? moveForward : submitAnswer}
+          onPress={submitted ? moveForward : () => submitAnswer()}
           disabled={!submitted && !canSubmit}
         >
           <Text style={styles.footerButtonText}>
@@ -1280,9 +1426,44 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
+  metaLeft: {
+    flex: 1,
+    gap: 2,
+  },
   comboText: {
     fontWeight: "800",
     letterSpacing: 0.4,
+  },
+  modeHint: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  timerPill: {
+    minWidth: 82,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    gap: 5,
+  },
+  timerLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+  },
+  timerText: {
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  timerTrack: {
+    height: 4,
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  timerFill: {
+    height: "100%",
+    borderRadius: 999,
   },
   reviewTag: {
     flexDirection: "row",
@@ -1542,6 +1723,20 @@ const styles = StyleSheet.create({
   },
   feedbackBody: {
     lineHeight: 22,
+  },
+  adaptiveNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  adaptiveNoteText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700",
   },
   correctAnswerText: {
     fontWeight: "700",

@@ -32,6 +32,8 @@ interface ProgressRecord {
   completed: boolean;
 }
 
+type PlayMode = "classic" | "speed" | "boss";
+
 export default function PracticeScreen() {
   const router = useRouter();
   const { theme } = useAppTheme();
@@ -82,84 +84,130 @@ export default function PracticeScreen() {
 
   const gameModes = [
     {
+      key: "classic",
+      targetType: "multiple_choice",
+      playMode: "classic" as PlayMode,
+      icon: "school-outline" as const,
+      title: "Modo clásico",
+      desc: "Aprende sin presión, con explicación y repaso de errores.",
+      featured: true,
+    },
+    {
+      key: "speed",
+      targetType: "speed",
+      playMode: "speed" as PlayMode,
+      icon: "timer-outline" as const,
+      title: "Modo rápido",
+      desc: "10 segundos por pregunta. Ideal para cálculo mental.",
+      featured: true,
+    },
+    {
+      key: "boss",
+      targetType: "logic",
+      playMode: "boss" as PlayMode,
+      icon: "flame-outline" as const,
+      title: "Batalla contra el jefe",
+      desc: "Reto duro: menos corazones, más XP y cofre grande.",
+      featured: true,
+    },
+    {
       key: "multiple_choice",
+      targetType: "multiple_choice",
+      playMode: "classic" as PlayMode,
       icon: "apps-outline" as const,
       title: "Selección rápida",
       desc: "Varias opciones, una respuesta correcta.",
     },
     {
       key: "numeric_input",
+      targetType: "numeric_input",
+      playMode: "classic" as PlayMode,
       icon: "keypad-outline" as const,
       title: "Respuesta numérica",
       desc: "Escribe el resultado sin ayuda.",
     },
     {
       key: "true_false",
+      targetType: "true_false",
+      playMode: "classic" as PlayMode,
       icon: "help-circle-outline" as const,
       title: "Verdadero o falso",
       desc: "Decide si la afirmación está bien resuelta.",
     },
     {
       key: "sequence_choice",
+      targetType: "sequence_choice",
+      playMode: "classic" as PlayMode,
       icon: "git-compare-outline" as const,
       title: "Secuencia lógica",
       desc: "Ordena pasos para llegar al resultado.",
     },
     {
       key: "pattern_grid_choice",
+      targetType: "pattern_grid_choice",
+      playMode: "classic" as PlayMode,
       icon: "grid-outline" as const,
       title: "Patrones visuales",
       desc: "Completa tablas y detecta relaciones multiplicativas.",
     },
     {
       key: "missing_factor_choice",
+      targetType: "missing_factor_choice",
+      playMode: "classic" as PlayMode,
       icon: "remove-outline" as const,
       title: "Factor faltante",
       desc: "Encuentra el número escondido dentro de la ecuación.",
     },
     {
       key: "numeric_keypad",
+      targetType: "numeric_keypad",
+      playMode: "classic" as PlayMode,
       icon: "keypad-outline" as const,
       title: "Teclado mental",
       desc: "Resuelve rápido escribiendo tu respuesta con teclado propio.",
     },
     {
       key: "equation_builder",
+      targetType: "equation_builder",
+      playMode: "classic" as PlayMode,
       icon: "construct-outline" as const,
       title: "Constructor algebraico",
       desc: "Arma ecuaciones con fichas y completa igualdades.",
     },
     {
       key: "logic",
+      targetType: "logic",
+      playMode: "classic" as PlayMode,
       icon: "bulb-outline" as const,
       title: "Lógica universitaria",
       desc: "Resuelve pasos de funciones, tasas y despejes iniciales.",
     },
     {
       key: "mixed",
+      targetType: "mixed",
+      playMode: "classic" as PlayMode,
       icon: "shuffle-outline" as const,
       title: "Reto mixto",
       desc: "Combina cálculo, selección, secuencias y lectura de datos.",
     },
-    {
-      key: "speed",
-      icon: "timer-outline" as const,
-      title: "Ritmo rápido",
-      desc: "Entrena cálculos cortos bajo presión mental.",
-    },
   ];
 
-  const launchMode = (type: string) => {
+  const launchMode = (type: string, mode: PlayMode = "classic") => {
+    const candidates =
+      mode === "boss"
+        ? [...lessonPool].sort((left, right) => right.difficulty - left.difficulty)
+        : lessonPool;
     const lesson =
-      lessonPool.find((item) => item.challengeType === type && !item.completed) ||
-      lessonPool.find((item) => item.challengeType === type) ||
-      lessonPool.find((item) => !item.completed) ||
-      lessonPool[0];
+      candidates.find((item) => item.challengeType === type && !item.completed) ||
+      candidates.find((item) => item.challengeType === type) ||
+      candidates.find((item) => !item.completed) ||
+      candidates[0];
     if (lesson) {
       router.push({
         pathname: `/lesson/${lesson.id}` as any,
         params: {
           returnTo: "/(tabs)/practice",
+          playMode: mode,
         },
       });
     }
@@ -197,16 +245,25 @@ export default function PracticeScreen() {
         {gameModes.map((mode) => (
           <TouchableOpacity
             key={mode.key}
-            style={[styles.quickCard, { backgroundColor: theme.surfaceAccent, borderColor: theme.border }]}
-            onPress={() => launchMode(mode.key)}
+            style={[
+              styles.quickCard,
+              { backgroundColor: mode.featured ? theme.surface : theme.surfaceAccent, borderColor: mode.featured ? theme.primary : theme.border },
+              mode.featured && styles.featuredCard,
+            ]}
+            onPress={() => launchMode(mode.targetType, mode.playMode)}
           >
-            <View style={[styles.quickIconWrap, { backgroundColor: theme.surface }]}>
-              <Ionicons name={mode.icon} size={24} color={theme.text} />
+            <View style={[styles.quickIconWrap, { backgroundColor: mode.featured ? theme.primary : theme.surface }]}>
+              <Ionicons name={mode.icon} size={24} color={mode.featured ? "#fff" : theme.text} />
             </View>
             <View style={styles.quickContent}>
               <Text style={[styles.quickTitle, { color: theme.text }]}>{mode.title}</Text>
               <Text style={[styles.quickDesc, { color: theme.textSoft }]}>{mode.desc}</Text>
             </View>
+            {mode.featured ? (
+              <View style={[styles.modeBadge, { backgroundColor: theme.mode === "dark" ? "#1d3620" : "#e8ffd8" }]}>
+                <Text style={[styles.modeBadgeText, { color: theme.primary }]}>1.2</Text>
+              </View>
+            ) : null}
             <Ionicons name="chevron-forward" size={20} color={theme.textSoft} />
           </TouchableOpacity>
         ))}
@@ -224,6 +281,7 @@ export default function PracticeScreen() {
                   pathname: `/lesson/${lesson.id}` as any,
                   params: {
                     returnTo: "/(tabs)/practice",
+                    playMode: "classic",
                   },
                 })
               }
@@ -326,6 +384,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
   },
+  featuredCard: {
+    borderWidth: 2,
+    shadowColor: "#58cc02",
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
   quickIconWrap: {
     width: 44,
     height: 44,
@@ -345,6 +411,16 @@ const styles = StyleSheet.create({
   },
   quickDesc: {
     fontSize: 14,
+  },
+  modeBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginRight: 8,
+  },
+  modeBadgeText: {
+    fontSize: 11,
+    fontWeight: "900",
   },
   lessonCard: {
     flexDirection: "row",
